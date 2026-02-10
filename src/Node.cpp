@@ -47,6 +47,7 @@ Node::Node()
 , _target_angular_velocity_x{0. * rad/s}
 , _target_angular_velocity_y{0. * rad/s}
 , _target_angular_velocity_z{0. * rad/s}
+, _imu_qos_profile{rclcpp::KeepLast(10), rmw_qos_profile_sensor_data}
 {
   init_cyphal_heartbeat();
   init_cyphal_node_info();
@@ -55,7 +56,7 @@ Node::Node()
   declare_parameter("can_node_id", 100);
 
   RCLCPP_INFO(get_logger(),
-              "configuring CAN bus:\n\tDevice: %s\n\tNode Id: %ld",
+              "configuring CAN2233 bus:\n\tDevice: %s\n\tNode Id: %ld",
               get_parameter("can_iface").as_string().c_str(),
               get_parameter("can_node_id").as_int());
 
@@ -78,10 +79,17 @@ Node::Node()
                                        });
 
   init_teleop_sub();
+  init_imu_sub();
 
   _ctrl_loop_timer = create_wall_timer(CTRL_LOOP_RATE, [this]() { this->ctrl_loop(); });
 
   _cyphal_demo_pub = _node_hdl.create_publisher<uavcan::primitive::scalar::Integer8_1_0>(CYPHAL_DEMO_PORT_ID, 1*1000*1000UL);
+
+  _setpoint_velocity_pub_1 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_1, 1*1000*1000UL);
+  _setpoint_velocity_pub_2 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_2, 1*1000*1000UL);
+  _setpoint_velocity_pub_3 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_3, 1*1000*1000UL);
+  _setpoint_velocity_pub_4 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_4, 1*1000*1000UL);
+
 
   RCLCPP_INFO(get_logger(), "%s init complete.", get_name());
 }
@@ -114,6 +122,7 @@ void Node::init_cyphal_heartbeat()
                                                 {
                                                   std::lock_guard <std::mutex> lock(_node_mtx);
                                                   _cyphal_heartbeat_pub->publish(msg);
+
                                                 }
                                               });
 }
@@ -214,14 +223,139 @@ void Node::init_teleop_sub()
     _teleop_sub_options);
 }
 
+void Node::init_imu_sub()
+{
+  declare_parameter("imu_topic", "imu");
+  declare_parameter("imu_topic_deadline_ms", 100);
+  declare_parameter("imu_topic_liveliness_lease_duration", 1000);
+
+  auto const imu_topic = get_parameter("imu_topic").as_string();
+  auto const imu_topic_deadline = std::chrono::milliseconds(get_parameter("imu_topic_deadline_ms").as_int());
+  auto const imu_topic_liveliness_lease_duration = std::chrono::milliseconds(get_parameter("imu_topic_liveliness_lease_duration").as_int());
+
+  _imu_qos_profile.deadline(imu_topic_deadline);
+  _imu_qos_profile.liveliness(RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC);
+  _imu_qos_profile.liveliness_lease_duration(imu_topic_liveliness_lease_duration);
+
+  _imu_sub_options.event_callbacks.deadline_callback =
+    [this, imu_topic](rclcpp::QOSDeadlineRequestedInfo & event) -> void
+    {
+      RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5*1000UL,
+                            "deadline missed for \"%s\" (total_count: %d, total_count_change: %d).",
+                            imu_topic.c_str(), event.total_count, event.total_count_change);
+    };
+
+  _imu_sub_options.event_callbacks.liveliness_callback =
+    [this, imu_topic](rclcpp::QOSLivelinessChangedInfo & event) -> void
+    {
+      if (event.alive_count > 0)
+      {
+        RCLCPP_INFO(get_logger(), "liveliness gained for \"%s\"", imu_topic.c_str());
+      }
+      else
+      {
+        RCLCPP_WARN(get_logger(), "liveliness lost for \"%s\"", imu_topic.c_str());
+      }
+    };
+
+  _imu_sub = create_subscription<sensor_msgs::msg::Imu>(
+    imu_topic,
+    _imu_qos_profile,
+    [this](sensor_msgs::msg::Imu::SharedPtr const msg)
+    {
+      _imu_data = *msg;
+
+      RCLCPP_INFO(get_logger(),
+                  "IMU Pose (x,y,z,w): %0.2f %0.2f %0.2f %0.2f",
+                  _imu_data.orientation.x,
+                  _imu_data.orientation.y,
+                  _imu_data.orientation.z,
+                  _imu_data.orientation.w);
+    },
+    _imu_sub_options);
+}
+
 void Node::ctrl_loop()
 {
-  /* TODO: implement me ... */
+  // Check if IMU data is available
+  if (!_imu_data.orientation_covariance.empty())
+  {
+    // Log the x orientation data
+    RCLCPP_INFO(get_logger(), "IMU x orientation: %f", _imu_data.orientation.x);
+    
+    // Check if x orientation data exceeds 0.2
+    if (_imu_data.orientation.x > 0.2)
+    {
+      // Call motor
+      zubax::primitive::real16::Vector4_1_0 const motor_msg{150.0, 100.0, 100.0, 10.0};
+      _setpoint_velocity_pub_1->publish(motor_msg);
+    }
+    else
+    {
+      // Do something else if x orientation data does not exceed 0.2
+      // For example, stop the motor
+      zubax::primitive::real16::Vector4_1_0 const motor_msg{10.0, 100.0, 10.0, 10.0};
+      _setpoint_velocity_pub_1->publish(motor_msg);
+    }
+
+    if (_imu_data.orientation.y > 0.2)
+    {
+      // Call motor
+      zubax::primitive::real16::Vector4_1_0 const motor_msg{150.0, 100.0, 100.0, 10.0};
+      _setpoint_velocity_pub_4->publish(motor_msg);
+    }
+    else
+    {
+      // Do something else if x orientation data does not exceed 0.2
+      // For example, stop the motor
+      zubax::primitive::real16::Vector4_1_0 const motor_msg{10.0, 100.0, 10.0, 10.0};
+      _setpoint_velocity_pub_4->publish(motor_msg);
+    }
+
+    if (_imu_data.orientation.z < 0.6)
+    {
+      // Call motor
+      zubax::primitive::real16::Vector4_1_0 const motor_msg{150.0, 100.0, 100.0, 10.0};
+      _setpoint_velocity_pub_2->publish(motor_msg);
+    }
+    else
+    {
+      // Do something else if x orientation data does not exceed 0.2
+      // For example, stop the motor
+      zubax::primitive::real16::Vector4_1_0 const motor_msg{10.0, 100.0, 10.0, 10.0};
+      _setpoint_velocity_pub_2->publish(motor_msg);
+
+    if (_imu_data.orientation.w < 0.65)
+    {
+      // Call motor
+      zubax::primitive::real16::Vector4_1_0 const motor_msg{150.0, 100.0, 100.0, 10.0};
+      _setpoint_velocity_pub_3->publish(motor_msg);
+    }
+    else
+    {
+      // Do something else if x orientation data does not exceed 0.2
+      // For example, stop the motor
+      zubax::primitive::real16::Vector4_1_0 const motor_msg{10.0, 100.0, 10.0, 10.0};
+      _setpoint_velocity_pub_3->publish(motor_msg);
+    }
+
+
+    }
+  }
+  else
+  {
+    RCLCPP_WARN(get_logger(), "No IMU data available.");
+  }
+
+  // Publish demo message
   static int8_t demo_cnt = 0;
   uavcan::primitive::scalar::Integer8_1_0 const demo_msg{demo_cnt};
   _cyphal_demo_pub->publish(demo_msg);
+
+  // Increment demo counter
   demo_cnt++;
 }
+
 
 /**************************************************************************************
  * NAMESPACE
