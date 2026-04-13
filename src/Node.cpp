@@ -34,11 +34,7 @@ Node::Node()
             cyphal::Node::DEFAULT_MTU_SIZE}
 , _node_mtx{}
 , _node_start{std::chrono::steady_clock::now()}
-, _teleop_qos_profile
-{
-  rclcpp::KeepLast(10),
-  rmw_qos_profile_sensor_data
-}
+, _teleop_qos_profile{rclcpp::KeepLast(10)}
 , _teleop_sub_options{}
 , _teleop_sub{}
 , _target_linear_velocity_x{0. * m/s}
@@ -47,7 +43,10 @@ Node::Node()
 , _target_angular_velocity_x{0. * rad/s}
 , _target_angular_velocity_y{0. * rad/s}
 , _target_angular_velocity_z{0. * rad/s}
+, _motors_enabled(false)
 , _imu_qos_profile{rclcpp::KeepLast(10), rmw_qos_profile_sensor_data}
+, _attitude_target(1.0f, 0.0f, 0.0f, 0.0f)  // Initialize to level attitude (identity quaternion)
+, _thrust_target(0.0f)
 {
   init_cyphal_heartbeat();
   init_cyphal_node_info();
@@ -79,7 +78,11 @@ Node::Node()
                                        });
 
   init_teleop_sub();
+  init_joy_sub();
   init_imu_sub();
+
+  // Initialize attitude control parameters
+  declare_control_parameters();
 
   _ctrl_loop_timer = create_wall_timer(CTRL_LOOP_RATE, [this]() { this->ctrl_loop(); });
 
@@ -158,18 +161,21 @@ CanardMicrosecond Node::micros()
 
 void Node::init_teleop_sub()
 {
+  // Declare default parameters for teleop topic and QoS settings
   declare_parameter("teleop_topic", "cmd_vel_head");
   declare_parameter("teleop_topic_deadline_ms", 100);
   declare_parameter("teleop_topic_liveliness_lease_duration", 1000);
 
+  // Use parameters declared in viper-quad.py to confgure subscriptions
   auto const teleop_topic = get_parameter("teleop_topic").as_string();
   auto const teleop_topic_deadline = std::chrono::milliseconds(get_parameter("teleop_topic_deadline_ms").as_int());
   auto const teleop_topic_liveliness_lease_duration = std::chrono::milliseconds(get_parameter("teleop_topic_liveliness_lease_duration").as_int());
 
   _teleop_qos_profile.deadline(teleop_topic_deadline);
-  _teleop_qos_profile.liveliness(RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC);
+  _teleop_qos_profile.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
   _teleop_qos_profile.liveliness_lease_duration(teleop_topic_liveliness_lease_duration);
 
+  // These 2 callbacks useless for now as liveliness set to 0 (joy_teleop node already zeroes them out). Maybe not??
   _teleop_sub_options.event_callbacks.deadline_callback =
     [this, teleop_topic](rclcpp::QOSDeadlineRequestedInfo & event) -> void
     {
@@ -184,6 +190,10 @@ void Node::init_teleop_sub()
       _target_angular_velocity_x = 0. * rad/s;
       _target_angular_velocity_y = 0. * rad/s;
       _target_angular_velocity_z = 0. * rad/s;
+
+      // Reset attitude and thrust targets to safe values
+      _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);  // Identity quaternion (level)
+      _thrust_target = 0.0f;  // No thrust
     };
 
   _teleop_sub_options.event_callbacks.liveliness_callback =
@@ -204,6 +214,10 @@ void Node::init_teleop_sub()
         _target_angular_velocity_x = 0. * rad/s;
         _target_angular_velocity_y = 0. * rad/s;
         _target_angular_velocity_z = 0. * rad/s;
+
+        // Reset attitude and thrust targets to safe values
+        _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);  // Identity quaternion (level)
+        _thrust_target = 0.0f;  // No thrust
       }
     };
 
@@ -212,6 +226,15 @@ void Node::init_teleop_sub()
     _teleop_qos_profile,
     [this](geometry_msgs::msg::Twist::SharedPtr const msg)
     {
+      // Only process inputs if motors are enabled
+      if (!_motors_enabled) {
+        // Disarm motors when not enabled
+        _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);  // Identity quaternion (level)
+        _thrust_target = 0.0f;  // No thrust
+        return;
+      }
+
+      // Store velocity commands
       _target_linear_velocity_x = static_cast<double>(msg->linear.x) * m/s;
       _target_linear_velocity_y = static_cast<double>(msg->linear.y) * m/s;
       _target_linear_velocity_z = static_cast<double>(msg->linear.z) * m/s;
@@ -219,8 +242,91 @@ void Node::init_teleop_sub()
       _target_angular_velocity_x = static_cast<double>(msg->angular.x) * rad/s;
       _target_angular_velocity_y = static_cast<double>(msg->angular.y) * rad/s;
       _target_angular_velocity_z = static_cast<double>(msg->angular.z) * rad/s;
+
+      // Debug: Log controller input changes
+      RCLCPP_INFO(get_logger(),
+                   "PS3 Controller Input - Linear: [x=%.2f, y=%.2f, z=%.2f] m/s | Angular: [x=%.2f, y=%.2f, z=%.2f] rad/s",
+                   msg->linear.x, msg->linear.y, msg->linear.z,
+                   msg->angular.x, msg->angular.y, msg->angular.z);
+
+      // === Convert velocity commands to attitude and thrust targets ===
+      
+      // Get max tilt angle from parameters
+      float max_tilt = static_cast<float>(get_parameter("max_tilt_angle").as_double());
+
+      // Compute desired attitude from linear velocities
+      // linear.x → pitch (forward/backward)
+      // linear.y → roll (lateral)
+      // These are scaled to not exceed max_tilt_angle
+      float pitch_target = 0.0f;
+      float roll_target = 0.0f;
+
+      // Simple velocity to angle mapping (can be tuned)
+      // Assuming teleop max velocities are around ±1 m/s
+      if (std::abs(msg->linear.x) > 1e-3 || std::abs(msg->linear.y) > 1e-3) {
+        float vz_max = 1.0f;  // Expected max velocity in m/s
+        pitch_target = -std::clamp(static_cast<float>(msg->linear.x) / vz_max, -1.0f, 1.0f) * max_tilt;
+        roll_target = std::clamp(static_cast<float>(msg->linear.y) / vz_max, -1.0f, 1.0f) * max_tilt;
+      }
+
+      // Create quaternion from Euler angles (roll, pitch, yaw=0)
+      // For simplicity, use small angle approximation for quaternion
+      float cy = std::cos(0.0f / 2.0f);
+      float sy = std::sin(0.0f / 2.0f);
+      float cp = std::cos(pitch_target / 2.0f);
+      float sp = std::sin(pitch_target / 2.0f);
+      float cr = std::cos(roll_target / 2.0f);
+      float sr = std::sin(roll_target / 2.0f);
+
+      _attitude_target.w = cr * cp * cy + sr * sp * sy;
+      _attitude_target.x = sr * cp * cy - cr * sp * sy;
+      _attitude_target.y = cr * sp * cy + sr * cp * sy;
+      _attitude_target.z = cr * cp * sy - sr * sp * cy;
+
+      // Map thrust: linear.z velocity (up/down) to throttle [0, 1]
+      // Assuming 0 m/s = hover (0.5), positive = up, negative = down
+      _thrust_target = std::clamp(0.5f + static_cast<float>(msg->linear.z) * 0.5f, 0.0f, 1.0f);
     },
     _teleop_sub_options);
+}
+
+void Node::init_joy_sub()
+{
+  _joy_sub = create_subscription<sensor_msgs::msg::Joy>(
+    "joy",
+    rclcpp::QoS(10),
+    [this](sensor_msgs::msg::Joy::SharedPtr const msg)
+    {
+      // Check enable button (button 7 = Right Bumper/R1)
+      const int ENABLE_BUTTON_INDEX = 7;
+      if (msg->buttons.size() > ENABLE_BUTTON_INDEX) {
+        bool enable_pressed = (msg->buttons[ENABLE_BUTTON_INDEX] == 1);
+        _motors_enabled = enable_pressed;
+        
+        if (enable_pressed) {
+          RCLCPP_DEBUG(get_logger(), "Motors ENABLED (button %d pressed)", ENABLE_BUTTON_INDEX);
+          // Use the current IMU attitude as the hold target when arming.
+          if (!_imu_data.orientation_covariance.empty()) {
+            _attitude_target = Quaternion::from_msg(
+              _imu_data.orientation.x,
+              _imu_data.orientation.y,
+              _imu_data.orientation.z,
+              _imu_data.orientation.w
+            ).normalized();
+          }
+          _attitude_controller.reset();
+          _rate_controller.reset();
+        } else {
+          RCLCPP_DEBUG(get_logger(), "Motors DISABLED (button %d released)", ENABLE_BUTTON_INDEX);
+          // Disarm motors immediately when enable button is released
+          _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);  // Identity quaternion (level)
+          _thrust_target = 0.0f;  // No thrust
+          // _target_angular_velocity_z = 0.0f;
+          _attitude_controller.reset();
+          _rate_controller.reset();
+        }
+      }
+    });
 }
 
 void Node::init_imu_sub()
@@ -265,12 +371,12 @@ void Node::init_imu_sub()
     {
       _imu_data = *msg;
 
-      RCLCPP_INFO(get_logger(),
-                  "IMU Pose (x,y,z,w): %0.2f %0.2f %0.2f %0.2f",
-                  _imu_data.orientation.x,
-                  _imu_data.orientation.y,
-                  _imu_data.orientation.z,
-                  _imu_data.orientation.w);
+      // RCLCPP_INFO(get_logger(),
+      //             "IMU Pose (x,y,z,w): %0.2f %0.2f %0.2f %0.2f",
+      //             _imu_data.orientation.x,
+      //             _imu_data.orientation.y,
+      //             _imu_data.orientation.z,
+      //             _imu_data.orientation.w);
     },
     _imu_sub_options);
 }
@@ -278,82 +384,154 @@ void Node::init_imu_sub()
 void Node::ctrl_loop()
 {
   // Check if IMU data is available
-  if (!_imu_data.orientation_covariance.empty())
-  {
-    // Log the x orientation data
-    RCLCPP_INFO(get_logger(), "IMU x orientation: %f", _imu_data.orientation.x);
+  if (_imu_data.orientation_covariance.empty()) {
+    return;  // No IMU data yet
+  }
+
+  // Extract current attitude from IMU (ROS convention: x, y, z, w)
+  Quaternion attitude_current = Quaternion::from_msg(
+    _imu_data.orientation.x,
+    _imu_data.orientation.y,
+    _imu_data.orientation.z,
+    _imu_data.orientation.w
+  ).normalized();
+
+  // Extract current angular rates from IMU gyroscope
+  Vector3 rate_current(
+    _imu_data.angular_velocity.x,
+    _imu_data.angular_velocity.y,
+    _imu_data.angular_velocity.z
+  );
+
+  // === Cascaded PID Control Loop ===
+
+  // Level 1: Attitude Controller
+  // Inputs: current attitude, target attitude
+  // Output: target angular rates
+  Vector3 rate_target = _attitude_controller.update(attitude_current, _attitude_target);
+
+  // Level 2: Rate Controller
+  // Inputs: target rates, current rates
+  // Output: target torques
+  Vector3 torque_target = _rate_controller.update(rate_target, rate_current);
+
+  // Motor Mixer
+  // Inputs: thrust, torques
+  // Output: 4 motor commands [0, 1]
+  auto motor_commands = _motor_mixer.mix(_thrust_target, torque_target);
+
+  // Scale motor commands to appropriate range for Cyphal message
+  // The motor controller expects values in some range (e.g., 0-255 or 0-1)
+  // Adjust the scaling factor based on your motor controller's input requirements
+  const float MOTOR_SCALE = 1000.0f;  // Scale to 0-1000 range for visualization/control
+  
+  zubax::primitive::real16::Vector4_1_0 motor_msg{
+    motor_commands[0] * MOTOR_SCALE,
+    motor_commands[1] * MOTOR_SCALE,
+    motor_commands[2] * MOTOR_SCALE,
+    motor_commands[3] * MOTOR_SCALE
+  };
+
+  // Publish motor commands to all 4 motors
+  _setpoint_velocity_pub_1->publish(motor_msg);
+  _setpoint_velocity_pub_2->publish(motor_msg);
+  _setpoint_velocity_pub_3->publish(motor_msg);
+  _setpoint_velocity_pub_4->publish(motor_msg);
+
+  // Optional: Log controller state for debugging
+  if (true) {  // Set to true for verbose logging
+    Vector3 attitude_euler = attitude_current.to_euler();
+    RCLCPP_INFO(get_logger(),
+      "Attitude (deg): roll=%.1f pitch=%.1f yaw=%.1f | "
+      "Rates (rad/s): x=%.2f y=%.2f z=%.2f | "
+      "Motors: [%.2f, %.2f, %.2f, %.2f]",
+      attitude_euler.x * 180 / M_PI, attitude_euler.y * 180 / M_PI, attitude_euler.z * 180 / M_PI,
+      rate_current.x, rate_current.y, rate_current.z,
+      motor_commands[0], motor_commands[1], motor_commands[2], motor_commands[3]
+    );
+  }
+}
+
+
+void Node::declare_control_parameters()
+{
+  // Attitude controller parameters
+  declare_parameter("attitude_roll_p", 6.0);
+  declare_parameter("attitude_pitch_p", 6.0);
+  declare_parameter("attitude_yaw_p", 3.0);
+
+  // Rate controller parameters (with default flix values)
+  declare_parameter("rate_roll_p", 0.05);
+  declare_parameter("rate_roll_i", 0.2);
+  declare_parameter("rate_roll_d", 0.001);
+
+  declare_parameter("rate_pitch_p", 0.05);
+  declare_parameter("rate_pitch_i", 0.2);
+  declare_parameter("rate_pitch_d", 0.001);
+
+  declare_parameter("rate_yaw_p", 0.3);
+  declare_parameter("rate_yaw_i", 0.0);
+  declare_parameter("rate_yaw_d", 0.0);
+
+  declare_parameter("rate_integral_windup", 0.3);
+  declare_parameter("rate_derivative_filter_alpha", 0.2);
+
+  // Velocity to attitude mapping
+  declare_parameter("max_tilt_angle", 0.5236);  // 30 degrees in radians
+
+  // Load and apply parameters
+  on_parameter_changed();
+
+  // Add parameter change callback for live tuning
+  auto handle = add_on_set_parameters_callback([this](const std::vector<rclcpp::Parameter> & params) {
+    (void)params;  // Suppress unused parameter warning
+    on_parameter_changed();
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    result.reason = "";
+    return result;
+  });
+}
+
+
+void Node::on_parameter_changed()
+{
+  // Update attitude controller gains
+  _attitude_controller.set_gains(
+    static_cast<float>(get_parameter("attitude_roll_p").as_double()),
+    static_cast<float>(get_parameter("attitude_pitch_p").as_double()),
+    static_cast<float>(get_parameter("attitude_yaw_p").as_double())
+  );
+
+  // Update rate controller gains
+  _rate_controller.set_gains(
+    static_cast<float>(get_parameter("rate_roll_p").as_double()),
+    static_cast<float>(get_parameter("rate_roll_i").as_double()),
+    static_cast<float>(get_parameter("rate_roll_d").as_double()),
     
-    // Check if x orientation data exceeds 0.2
-    if (_imu_data.orientation.x > 0.2)
-    {
-      // Call motor
-      zubax::primitive::real16::Vector4_1_0 const motor_msg{150.0, 100.0, 100.0, 10.0};
-      _setpoint_velocity_pub_1->publish(motor_msg);
-    }
-    else
-    {
-      // Do something else if x orientation data does not exceed 0.2
-      // For example, stop the motor
-      zubax::primitive::real16::Vector4_1_0 const motor_msg{10.0, 100.0, 10.0, 10.0};
-      _setpoint_velocity_pub_1->publish(motor_msg);
-    }
+    static_cast<float>(get_parameter("rate_pitch_p").as_double()),
+    static_cast<float>(get_parameter("rate_pitch_i").as_double()),
+    static_cast<float>(get_parameter("rate_pitch_d").as_double()),
+    
+    static_cast<float>(get_parameter("rate_yaw_p").as_double()),
+    static_cast<float>(get_parameter("rate_yaw_i").as_double()),
+    static_cast<float>(get_parameter("rate_yaw_d").as_double())
+  );
 
-    if (_imu_data.orientation.y > 0.2)
-    {
-      // Call motor
-      zubax::primitive::real16::Vector4_1_0 const motor_msg{150.0, 100.0, 100.0, 10.0};
-      _setpoint_velocity_pub_4->publish(motor_msg);
-    }
-    else
-    {
-      // Do something else if x orientation data does not exceed 0.2
-      // For example, stop the motor
-      zubax::primitive::real16::Vector4_1_0 const motor_msg{10.0, 100.0, 10.0, 10.0};
-      _setpoint_velocity_pub_4->publish(motor_msg);
-    }
+  // Update rate controller PID windup and filter settings
+  _rate_controller.get_roll_pid().windup_limit = 
+    static_cast<float>(get_parameter("rate_integral_windup").as_double());
+  _rate_controller.get_pitch_pid().windup_limit = 
+    static_cast<float>(get_parameter("rate_integral_windup").as_double());
+  _rate_controller.get_yaw_pid().windup_limit = 
+    static_cast<float>(get_parameter("rate_integral_windup").as_double());
 
-    if (_imu_data.orientation.z < 0.6)
-    {
-      // Call motor
-      zubax::primitive::real16::Vector4_1_0 const motor_msg{150.0, 100.0, 100.0, 10.0};
-      _setpoint_velocity_pub_2->publish(motor_msg);
-    }
-    else
-    {
-      // Do something else if x orientation data does not exceed 0.2
-      // For example, stop the motor
-      zubax::primitive::real16::Vector4_1_0 const motor_msg{10.0, 100.0, 10.0, 10.0};
-      _setpoint_velocity_pub_2->publish(motor_msg);
-
-    if (_imu_data.orientation.w < 0.65)
-    {
-      // Call motor
-      zubax::primitive::real16::Vector4_1_0 const motor_msg{150.0, 100.0, 100.0, 10.0};
-      _setpoint_velocity_pub_3->publish(motor_msg);
-    }
-    else
-    {
-      // Do something else if x orientation data does not exceed 0.2
-      // For example, stop the motor
-      zubax::primitive::real16::Vector4_1_0 const motor_msg{10.0, 100.0, 10.0, 10.0};
-      _setpoint_velocity_pub_3->publish(motor_msg);
-    }
-
-
-    }
-  }
-  else
-  {
-    RCLCPP_WARN(get_logger(), "No IMU data available.");
-  }
-
-  // Publish demo message
-  static int8_t demo_cnt = 0;
-  uavcan::primitive::scalar::Integer8_1_0 const demo_msg{demo_cnt};
-  _cyphal_demo_pub->publish(demo_msg);
-
-  // Increment demo counter
-  demo_cnt++;
+  _rate_controller.get_roll_pid().d_alpha = 
+    static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
+  _rate_controller.get_pitch_pid().d_alpha = 
+    static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
+  _rate_controller.get_yaw_pid().d_alpha = 
+    static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
 }
 
 
