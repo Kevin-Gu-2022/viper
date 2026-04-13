@@ -17,6 +17,7 @@
 #include <std_msgs/msg/float32.hpp>
 
 #include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/joy.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 
 #include <cyphal++/cyphal++.h>
@@ -25,6 +26,11 @@
 #include <mp-units/systems/angular/angular.h>
 
 #include "CanManager.h"
+#include "vector.h"
+#include "ComplementaryFilter.h"
+#include "CascadedController.h"
+#include "MotorMixer.h"
+
 
 /**************************************************************************************
  * NAMESPACE
@@ -73,14 +79,21 @@ private:
   rclcpp::QoS _teleop_qos_profile;
   rclcpp::SubscriptionOptions _teleop_sub_options;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr _teleop_sub;
-  quantity<m/s> _target_linear_velocity_x, _target_linear_velocity_y, _target_linear_velocity_z;
-  quantity<rad/s> _target_angular_velocity_x, _target_angular_velocity_y, _target_angular_velocity_z;
+
+  // Vectors representing target given from PS3 controller
+  Vector _target_linear_velocity;
+  Vector _target_angular_velocity;
+
   void init_teleop_sub();
+
+  rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr _joy_sub;
+  bool _armed;
+  void init_joy_sub();
 
   rclcpp::QoS _imu_qos_profile;
   rclcpp::SubscriptionOptions _imu_sub_options;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr _imu_sub;
-  sensor_msgs::msg::Imu _imu_data;
+//   sensor_msgs::msg::Imu _imu_data; // Removed. Replaced with new Estimator class
   void init_imu_sub();
 
 
@@ -99,15 +112,27 @@ private:
 
   static uint16_t constexpr SETPOINT_VELOCITY_ID_4 = 116;
   cyphal::Publisher<zubax::primitive::real16::Vector4_1_0> _setpoint_velocity_pub_4;
-    
 
-    
-    
+  // Attitude control system (default constructor called)
+  AttitudeController _attitude_controller;
+  RateController _rate_controller;
+  MotorMixer _motor_mixer;
+  
+  // Control targets
+  Quaternion _attitude_target;  // Target attitude (identity = level)
+  float _thrust_target = 0.0f;  // Target collective thrust [0, 1]
+  
+  // Declare parameters for tuning
+  void declare_control_parameters();
+  void on_parameter_changed();
 
-
-
+  // ctrl_loop variables
   static std::chrono::milliseconds constexpr CTRL_LOOP_RATE{10};
   rclcpp::TimerBase::SharedPtr _ctrl_loop_timer;
+
+  // Estimator object to perform state estimation
+  std::unique_ptr<EstimatorBase> _estimator;
+
   void ctrl_loop();
 };
 

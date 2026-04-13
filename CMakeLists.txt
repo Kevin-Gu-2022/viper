@@ -21,6 +21,9 @@ add_subdirectory(external/mp-units/src)
 #######################################################################################
 include_directories(include)
 #######################################################################################
+# Silence the GSL compatibility mode warnings
+add_definitions(-Dgsl_FEATURE_GSL_COMPATIBILITY_MODE=1)
+
 add_executable(${VIPER_TARGET}
   src/CanManager.cpp
   src/Node.cpp
@@ -34,6 +37,7 @@ ament_target_dependencies(${VIPER_TARGET} rclcpp std_msgs sensor_msgs geometry_m
 #######################################################################################
 install(TARGETS ${VIPER_TARGET} DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 #######################################################################################
 ament_package()
 #######################################################################################
