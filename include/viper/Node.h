@@ -83,7 +83,7 @@ private:
   void init_teleop_sub();
 
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr _joy_sub;
-  bool _motors_enabled;
+  bool _armed;
   void init_joy_sub();
 
   rclcpp::QoS _imu_qos_profile;
@@ -110,13 +110,13 @@ private:
   cyphal::Publisher<zubax::primitive::real16::Vector4_1_0> _setpoint_velocity_pub_4;
 
   // Attitude control system
-  AttitudeController _attitude_controller;
-  RateController _rate_controller;
-  MotorMixer _motor_mixer;
+  // AttitudeController _attitude_controller;
+  // RateController _rate_controller;
+  // MotorMixer _motor_mixer;
   
   // Control targets
-  Quaternion _attitude_target;  // Target attitude (identity = level)
-  float _thrust_target = 0.0f;  // Target collective thrust [0, 1]
+  // Quaternion _attitude_target;  // Target attitude (identity = level)
+  // float _thrust_target = 0.0f;  // Target collective thrust [0, 1]
   
   // Declare parameters for tuning
   void declare_control_parameters();

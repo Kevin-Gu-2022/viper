@@ -43,7 +43,7 @@ Node::Node()
 , _target_angular_velocity_x{0. * rad/s}
 , _target_angular_velocity_y{0. * rad/s}
 , _target_angular_velocity_z{0. * rad/s}
-, _motors_enabled(false)
+, _armed(false)
 , _imu_qos_profile{rclcpp::KeepLast(10), rmw_qos_profile_sensor_data}
 , _attitude_target(1.0f, 0.0f, 0.0f, 0.0f)  // Initialize to level attitude (identity quaternion)
 , _thrust_target(0.0f)
@@ -175,7 +175,7 @@ void Node::init_teleop_sub()
   _teleop_qos_profile.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
   _teleop_qos_profile.liveliness_lease_duration(teleop_topic_liveliness_lease_duration);
 
-  // These 2 callbacks useless for now as liveliness set to 0 (joy_teleop node already zeroes them out). Maybe not??
+  // Called when deadline missed, though currently set to 0ms, i.e. no deadline. Currently, this callback will never trigger
   _teleop_sub_options.event_callbacks.deadline_callback =
     [this, teleop_topic](rclcpp::QOSDeadlineRequestedInfo & event) -> void
     {
@@ -183,6 +183,7 @@ void Node::init_teleop_sub()
                             "deadline missed for \"%s\" (total_count: %d, total_count_change: %d).",
                             teleop_topic.c_str(), event.total_count, event.total_count_change);
 
+      // !TODO: Consolidate velocities as a Vector object
       _target_linear_velocity_x = 0. * m/s;
       _target_linear_velocity_y = 0. * m/s;
       _target_linear_velocity_z = 0. * m/s;
@@ -196,15 +197,18 @@ void Node::init_teleop_sub()
       _thrust_target = 0.0f;  // No thrust
     };
 
+  // Called when teleop publisher stops asserting liveliness
   _teleop_sub_options.event_callbacks.liveliness_callback =
     [this, teleop_topic](rclcpp::QOSLivelinessChangedInfo & event) -> void
     {
       if (event.alive_count > 0)
       {
+        // At least one node is publishing to teleop topic
         RCLCPP_INFO(get_logger(), "liveliness gained for \"%s\"", teleop_topic.c_str());
       }
       else
       {
+        // No nodes publishing to teleop topic, i.e. joystick node not running / disconnected
         RCLCPP_WARN(get_logger(), "liveliness lost for \"%s\"", teleop_topic.c_str());
 
         _target_linear_velocity_x = 0. * m/s;
@@ -221,13 +225,14 @@ void Node::init_teleop_sub()
       }
     };
 
+  // Create subscription to Twist messages from joystick  
   _teleop_sub = create_subscription<geometry_msgs::msg::Twist>(
     teleop_topic,
     _teleop_qos_profile,
     [this](geometry_msgs::msg::Twist::SharedPtr const msg)
     {
       // Only process inputs if motors are enabled
-      if (!_motors_enabled) {
+      if (!_armed) {
         // Disarm motors when not enabled
         _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);  // Identity quaternion (level)
         _thrust_target = 0.0f;  // No thrust
@@ -269,19 +274,11 @@ void Node::init_teleop_sub()
         roll_target = std::clamp(static_cast<float>(msg->linear.y) / vz_max, -1.0f, 1.0f) * max_tilt;
       }
 
-      // Create quaternion from Euler angles (roll, pitch, yaw=0)
-      // For simplicity, use small angle approximation for quaternion
-      float cy = std::cos(0.0f / 2.0f);
-      float sy = std::sin(0.0f / 2.0f);
-      float cp = std::cos(pitch_target / 2.0f);
-      float sp = std::sin(pitch_target / 2.0f);
-      float cr = std::cos(roll_target / 2.0f);
-      float sr = std::sin(roll_target / 2.0f);
-
-      _attitude_target.w = cr * cp * cy + sr * sp * sy;
-      _attitude_target.x = sr * cp * cy - cr * sp * sy;
-      _attitude_target.y = cr * sp * cy + sr * cp * sy;
-      _attitude_target.z = cr * cp * sy - sr * sp * cy;
+      // Calculate the attitude target using Quarterion member function
+      // _attitude_target.w = cr * cp * cy + sr * sp * sy;
+      // _attitude_target.x = sr * cp * cy - cr * sp * sy;
+      // _attitude_target.y = cr * sp * cy + sr * cp * sy;
+      // _attitude_target.z = cr * cp * sy - sr * sp * cy;
 
       // Map thrust: linear.z velocity (up/down) to throttle [0, 1]
       // Assuming 0 m/s = hover (0.5), positive = up, negative = down
@@ -301,32 +298,28 @@ void Node::init_joy_sub()
       const int ENABLE_BUTTON_INDEX = 7;
       if (msg->buttons.size() > ENABLE_BUTTON_INDEX) {
         bool enable_pressed = (msg->buttons[ENABLE_BUTTON_INDEX] == 1);
-        _motors_enabled = enable_pressed;
+        _armed = enable_pressed;
         
-        if (enable_pressed) {
-          RCLCPP_DEBUG(get_logger(), "Motors ENABLED (button %d pressed)", ENABLE_BUTTON_INDEX);
-          // Use the current IMU attitude as the hold target when arming.
-          if (!_imu_data.orientation_covariance.empty()) {
-            _attitude_target = Quaternion::from_msg(
-              _imu_data.orientation.x,
-              _imu_data.orientation.y,
-              _imu_data.orientation.z,
-              _imu_data.orientation.w
-            ).normalized();
-          }
-          _attitude_controller.reset();
-          _rate_controller.reset();
-        } else {
-          RCLCPP_DEBUG(get_logger(), "Motors DISABLED (button %d released)", ENABLE_BUTTON_INDEX);
-          // Disarm motors immediately when enable button is released
-          _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);  // Identity quaternion (level)
-          _thrust_target = 0.0f;  // No thrust
-          // _target_angular_velocity_z = 0.0f;
+        // If deadman switch released, reset target velocities/attitude and reset controllers
+        if (!enable_pressed) {
+          // Targets from joystick
+          _target_linear_velocity_x = 0. * m/s;
+          _target_linear_velocity_y = 0. * m/s;
+          _target_linear_velocity_z = 0. * m/s;
+
+          _target_angular_velocity_x = 0. * rad/s;
+          _target_angular_velocity_y = 0. * rad/s;
+          _target_angular_velocity_z = 0. * rad/s;
+
+          // Targets used in ctrl loop
+          _thrust_target = 0.0f;
+          _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);
+
           _attitude_controller.reset();
           _rate_controller.reset();
         }
       }
-    });
+  });
 }
 
 void Node::init_imu_sub()
@@ -383,6 +376,11 @@ void Node::init_imu_sub()
 
 void Node::ctrl_loop()
 {
+
+  // Add somewhere here: return if landed
+
+
+
   // Check if IMU data is available
   if (_imu_data.orientation_covariance.empty()) {
     return;  // No IMU data yet
