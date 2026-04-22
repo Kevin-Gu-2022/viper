@@ -49,6 +49,11 @@ namespace viper {
             }
         }
 
+        // Zero out vector
+        void reset() {
+            x = y = z = 0;
+        }
+
         Vector operator+(float b) const {
             return Vector(x + b, y + b, z + b);
         }
@@ -137,11 +142,5 @@ namespace viper {
     inline Vector operator*(float a, const Vector& b) { return b * a; }
     inline Vector operator+(float a, const Vector& b) { return b + a; }
 
-
-    // Replacement for printTo (C++ style)
-    // inline std::ostream& operator<<(std::ostream& os, const Vector& v) {
-    //     os << v.x << " " << v.y << " " << v.z;
-    //     return os;
-    // }
 
 }

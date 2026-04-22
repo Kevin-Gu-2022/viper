@@ -37,12 +37,8 @@ Node::Node()
 , _teleop_qos_profile{rclcpp::KeepLast(10)}
 , _teleop_sub_options{}
 , _teleop_sub{}
-, _target_linear_velocity_x{0. * m/s}
-, _target_linear_velocity_y{0. * m/s}
-, _target_linear_velocity_z{0. * m/s}
-, _target_angular_velocity_x{0. * rad/s}
-, _target_angular_velocity_y{0. * rad/s}
-, _target_angular_velocity_z{0. * rad/s}
+, _target_linear_velocity{}  // Zero target linear velocity (PS3 controller)
+, _target_angular_velocity{}  // Zero target angular velocity (PS3 controller)
 , _armed(false)
 , _imu_qos_profile{rclcpp::KeepLast(10), rmw_qos_profile_sensor_data}
 , _attitude_target(1.0f, 0.0f, 0.0f, 0.0f)  // Initialize to level attitude (identity quaternion)
@@ -76,6 +72,9 @@ Node::Node()
                                          std::lock_guard <std::mutex> lock(_node_mtx);
                                          _node_hdl.spinSome();
                                        });
+
+  // Initialise the state estimator object (estimator can be interchanged here)
+  _estimator = std::make_unique<ComplementaryFilter>();
 
   init_teleop_sub();
   init_joy_sub();
@@ -183,14 +182,8 @@ void Node::init_teleop_sub()
                             "deadline missed for \"%s\" (total_count: %d, total_count_change: %d).",
                             teleop_topic.c_str(), event.total_count, event.total_count_change);
 
-      // !TODO: Consolidate velocities as a Vector object
-      _target_linear_velocity_x = 0. * m/s;
-      _target_linear_velocity_y = 0. * m/s;
-      _target_linear_velocity_z = 0. * m/s;
-
-      _target_angular_velocity_x = 0. * rad/s;
-      _target_angular_velocity_y = 0. * rad/s;
-      _target_angular_velocity_z = 0. * rad/s;
+      _target_linear_velocity.reset();
+      _target_angular_velocity.reset();
 
       // Reset attitude and thrust targets to safe values
       _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);  // Identity quaternion (level)
@@ -211,13 +204,8 @@ void Node::init_teleop_sub()
         // No nodes publishing to teleop topic, i.e. joystick node not running / disconnected
         RCLCPP_WARN(get_logger(), "liveliness lost for \"%s\"", teleop_topic.c_str());
 
-        _target_linear_velocity_x = 0. * m/s;
-        _target_linear_velocity_y = 0. * m/s;
-        _target_linear_velocity_z = 0. * m/s;
-
-        _target_angular_velocity_x = 0. * rad/s;
-        _target_angular_velocity_y = 0. * rad/s;
-        _target_angular_velocity_z = 0. * rad/s;
+        _target_linear_velocity.reset();
+        _target_angular_velocity.reset();
 
         // Reset attitude and thrust targets to safe values
         _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);  // Identity quaternion (level)
@@ -239,14 +227,14 @@ void Node::init_teleop_sub()
         return;
       }
 
-      // Store velocity commands
-      _target_linear_velocity_x = static_cast<double>(msg->linear.x) * m/s;
-      _target_linear_velocity_y = static_cast<double>(msg->linear.y) * m/s;
-      _target_linear_velocity_z = static_cast<double>(msg->linear.z) * m/s;
+      // Store velocity commands (could just use an assignment method in Vector class...)
+      _target_linear_velocity.x = static_cast<double>(msg->linear.x);
+      _target_linear_velocity.y = static_cast<double>(msg->linear.y);
+      _target_linear_velocity.z = static_cast<double>(msg->linear.z);
 
-      _target_angular_velocity_x = static_cast<double>(msg->angular.x) * rad/s;
-      _target_angular_velocity_y = static_cast<double>(msg->angular.y) * rad/s;
-      _target_angular_velocity_z = static_cast<double>(msg->angular.z) * rad/s;
+      _target_angular_velocity.x = static_cast<double>(msg->angular.x);
+      _target_angular_velocity.y = static_cast<double>(msg->angular.y);
+      _target_angular_velocity.z = static_cast<double>(msg->angular.z);
 
       // Debug: Log controller input changes
       RCLCPP_INFO(get_logger(),
@@ -262,7 +250,7 @@ void Node::init_teleop_sub()
       // Compute desired attitude from linear velocities
       // linear.x → pitch (forward/backward)
       // linear.y → roll (lateral)
-      // These are scaled to not exceed max_tilt_angle
+      // These two are scaled to not exceed max_tilt_angle
       float pitch_target = 0.0f;
       float roll_target = 0.0f;
 
@@ -274,11 +262,10 @@ void Node::init_teleop_sub()
         roll_target = std::clamp(static_cast<float>(msg->linear.y) / vz_max, -1.0f, 1.0f) * max_tilt;
       }
 
-      // Calculate the attitude target using Quarterion member function
-      // _attitude_target.w = cr * cp * cy + sr * sp * sy;
-      // _attitude_target.x = sr * cp * cy - cr * sp * sy;
-      // _attitude_target.y = cr * sp * cy + sr * cp * sy;
-      // _attitude_target.z = cr * cp * sy - sr * sp * cy;
+      // Missing this implementation for resetting yaw. Not really needed
+      //   if (!armed || yaw_target != 0) yawTarget = attitude.getYaw();
+
+      _attitude_target = Quaternion::fromEuler(roll_target, pitch_target, _target_angular_velocity.z)
 
       // Map thrust: linear.z velocity (up/down) to throttle [0, 1]
       // Assuming 0 m/s = hover (0.5), positive = up, negative = down
@@ -303,13 +290,8 @@ void Node::init_joy_sub()
         // If deadman switch released, reset target velocities/attitude and reset controllers
         if (!enable_pressed) {
           // Targets from joystick
-          _target_linear_velocity_x = 0. * m/s;
-          _target_linear_velocity_y = 0. * m/s;
-          _target_linear_velocity_z = 0. * m/s;
-
-          _target_angular_velocity_x = 0. * rad/s;
-          _target_angular_velocity_y = 0. * rad/s;
-          _target_angular_velocity_z = 0. * rad/s;
+          _target_linear_velocity.reset();
+          _target_angular_velocity.reset();
 
           // Targets used in ctrl loop
           _thrust_target = 0.0f;
@@ -317,6 +299,8 @@ void Node::init_joy_sub()
 
           _attitude_controller.reset();
           _rate_controller.reset();
+
+          _estimator->reset(); // Flix would continue to perform estimation...
         }
       }
   });
@@ -362,7 +346,8 @@ void Node::init_imu_sub()
     _imu_qos_profile,
     [this](sensor_msgs::msg::Imu::SharedPtr const msg)
     {
-      _imu_data = *msg;
+    //   _imu_data = *msg;
+      _estimator->process(*msg)
 
       // RCLCPP_INFO(get_logger(),
       //             "IMU Pose (x,y,z,w): %0.2f %0.2f %0.2f %0.2f",
@@ -377,41 +362,27 @@ void Node::init_imu_sub()
 void Node::ctrl_loop()
 {
 
-  // Add somewhere here: return if landed
-
-
-
-  // Check if IMU data is available
-  if (_imu_data.orientation_covariance.empty()) {
-    return;  // No IMU data yet
-  }
-
-  // Extract current attitude from IMU (ROS convention: x, y, z, w)
-  Quaternion attitude_current = Quaternion::from_msg(
-    _imu_data.orientation.x,
-    _imu_data.orientation.y,
-    _imu_data.orientation.z,
-    _imu_data.orientation.w
-  ).normalized();
-
-  // Extract current angular rates from IMU gyroscope
-  Vector3 rate_current(
-    _imu_data.angular_velocity.x,
-    _imu_data.angular_velocity.y,
-    _imu_data.angular_velocity.z
-  );
+  // !TODO Add somewhere here: return if landed
+  
+  // This only fetches latest estimate. The estimator is decoupled
+  // and constantly running while new IMU data coming in 
+  auto const & est = _estimator->estimate();
+  if (!est.valid) return;
+  
+  Quaternion attitude_current = est.orientation;
+  Vector     rate_current     = est.rates;
 
   // === Cascaded PID Control Loop ===
 
   // Level 1: Attitude Controller
   // Inputs: current attitude, target attitude
   // Output: target angular rates
-  Vector3 rate_target = _attitude_controller.update(attitude_current, _attitude_target);
+  Vector rate_target = _attitude_controller.update(attitude_current, _attitude_target);
 
   // Level 2: Rate Controller
   // Inputs: target rates, current rates
   // Output: target torques
-  Vector3 torque_target = _rate_controller.update(rate_target, rate_current);
+  Vector torque_target = _rate_controller.update(rate_target, rate_current);
 
   // Motor Mixer
   // Inputs: thrust, torques

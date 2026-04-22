@@ -4,6 +4,8 @@
 // #include <algorithm>
 #include <chrono>
 
+#include "lpf.h"
+
 namespace viper {
 
     class PID {
@@ -42,9 +44,15 @@ namespace viper {
             prevError = error;
             prevTime = now;
             initialized = true;
+            
+            // NOTE: Flix clamps output directly: integral = std::clamp(i * integral, -windup, windup)
+            // Clamp integral to prevent windup (though if i too small, integral term may be very small)
+            if (windup > 0.0f) {
+                integral = std::clamp(integral, -windup, windup);
+            }
 
             return p * error
-                + std::clamp(i * integral, -windup, windup)
+                + i * integral
                 + d * derivative;
         }
 
