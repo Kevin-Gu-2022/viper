@@ -265,7 +265,7 @@ void Node::init_teleop_sub()
       // Missing this implementation for resetting yaw. Not really needed
       //   if (!armed || yaw_target != 0) yawTarget = attitude.getYaw();
 
-      _attitude_target = Quaternion::fromEuler(roll_target, pitch_target, _target_angular_velocity.z)
+      _attitude_target = Quaternion::fromEuler(Vector(roll_target, pitch_target, _target_angular_velocity.z));
 
       // Map thrust: linear.z velocity (up/down) to throttle [0, 1]
       // Assuming 0 m/s = hover (0.5), positive = up, negative = down
@@ -347,7 +347,7 @@ void Node::init_imu_sub()
     [this](sensor_msgs::msg::Imu::SharedPtr const msg)
     {
     //   _imu_data = *msg;
-      _estimator->process(*msg)
+      _estimator->process(*msg);
 
       // RCLCPP_INFO(get_logger(),
       //             "IMU Pose (x,y,z,w): %0.2f %0.2f %0.2f %0.2f",
@@ -370,7 +370,7 @@ void Node::ctrl_loop()
   if (!est.valid) return;
   
   Quaternion attitude_current = est.orientation;
-  Vector     rate_current     = est.rates;
+  Vector     rate_current     = est.angular_rate;
 
   // === Cascaded PID Control Loop ===
 
@@ -409,7 +409,7 @@ void Node::ctrl_loop()
 
   // Optional: Log controller state for debugging
   if (true) {  // Set to true for verbose logging
-    Vector3 attitude_euler = attitude_current.to_euler();
+    Vector attitude_euler = attitude_current.toEuler();
     RCLCPP_INFO(get_logger(),
       "Attitude (deg): roll=%.1f pitch=%.1f yaw=%.1f | "
       "Rates (rad/s): x=%.2f y=%.2f z=%.2f | "
@@ -495,12 +495,13 @@ void Node::on_parameter_changed()
   _rate_controller.get_yaw_pid().windup_limit = 
     static_cast<float>(get_parameter("rate_integral_windup").as_double());
 
-  _rate_controller.get_roll_pid().d_alpha = 
-    static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
-  _rate_controller.get_pitch_pid().d_alpha = 
-    static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
-  _rate_controller.get_yaw_pid().d_alpha = 
-    static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
+    // Should be setting the cutoff instead
+  // _rate_controller.get_roll_pid().d_alpha = 
+  //   static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
+  // _rate_controller.get_pitch_pid().d_alpha = 
+  //   static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
+  // _rate_controller.get_yaw_pid().d_alpha = 
+  //   static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
 }
 
 

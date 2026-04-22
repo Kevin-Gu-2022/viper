@@ -51,7 +51,7 @@ public:
      * @note Output motor values are clamped to [0.0, 1.0] range
      * @note Safety: if thrust < 0.05, all motors are set to 0 (disarmed)
      */
-    std::array<float, 4> mix(float thrust, const Vector3& torques) {
+    std::array<float, 4> mix(float thrust, const Vector& torques) {
         std::array<float, 4> motors;
 
         // Safety: disarm if thrust is too low
@@ -104,7 +104,7 @@ public:
      * @param torques Target torques vector
      * @return Scaled torques that respect motor output limits
      */
-    Vector limit_torques(float thrust, const Vector3& torques) {
+    Vector limit_torques(float thrust, const Vector& torques) {
         // Compute mixing extremes
         std::array<float, 4> motors = mix(thrust, torques);
 

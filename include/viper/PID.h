@@ -10,17 +10,17 @@ namespace viper {
 
     class PID {
     public:
+
         float p, i, d;
-        float windup;
+        float windup_limit;
+        LowPassFilter<float> lpf;
         float dtMax;
 
         float derivative = 0;
         float integral = 0;
 
-        LowPassFilter<float> lpf;
-
         PID(float p, float i, float d, float windup = 0, float dAlpha = 1, float dtMax = 0.1)
-            : p(p), i(i), d(d), windup(windup), lpf(dAlpha), dtMax(dtMax) {}
+            : p(p), i(i), d(d), windup_limit(windup), lpf(dAlpha), dtMax(dtMax) {}
 
         float update(float error) {
             using clock = std::chrono::steady_clock;
@@ -47,8 +47,8 @@ namespace viper {
             
             // NOTE: Flix clamps output directly: integral = std::clamp(i * integral, -windup, windup)
             // Clamp integral to prevent windup (though if i too small, integral term may be very small)
-            if (windup > 0.0f) {
-                integral = std::clamp(integral, -windup, windup);
+            if (windup_limit > 0.0f) {
+                integral = std::clamp(integral, -windup_limit, windup_limit);
             }
 
             return p * error

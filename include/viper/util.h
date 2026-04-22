@@ -15,20 +15,20 @@ namespace viper
     const float ONE_G = 9.80665;
     extern float t;
 
-    float mapf(float x, float in_min, float in_max, float out_min, float out_max) {
+    inline float mapf(float x, float in_min, float in_max, float out_min, float out_max) {
         return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
     }
 
-    bool invalid(float x) {
+    inline bool invalid(float x) {
         return !std::isfinite(x);
     }
 
-    bool valid(float x) {
+    inline bool valid(float x) {
         return std::isfinite(x);
     }
 
     // Wrap angle to [-PI, PI)
-    float wrapAngle(float angle) {
+    inline float wrapAngle(float angle) {
         angle = fmodf(angle, 2 * PI);
         if (angle > PI) {
             angle -= 2 * PI;

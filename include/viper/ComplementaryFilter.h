@@ -58,7 +58,7 @@ protected:
 
     AttitudeEstimate est;
     est.orientation = _attitude;
-    est.rates = _rates;
+    est.angular_rate = _rates;
     est.valid = _attitude.valid();
     return est;
   }
