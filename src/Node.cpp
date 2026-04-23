@@ -258,8 +258,8 @@ void Node::init_teleop_sub()
       // Assuming teleop max velocities are around ±1 m/s
       if (std::abs(msg->linear.x) > 1e-3 || std::abs(msg->linear.y) > 1e-3) {
         float vz_max = 1.0f;  // Expected max velocity in m/s
-        pitch_target = -std::clamp(static_cast<float>(msg->linear.x) / vz_max, -1.0f, 1.0f) * max_tilt;
-        roll_target = std::clamp(static_cast<float>(msg->linear.y) / vz_max, -1.0f, 1.0f) * max_tilt;
+        pitch_target = std::clamp(static_cast<float>(msg->linear.x) / vz_max, -1.0f, 1.0f) * max_tilt;
+        roll_target = -std::clamp(static_cast<float>(msg->linear.y) / vz_max, -1.0f, 1.0f) * max_tilt;
       }
 
       // Missing this implementation for resetting yaw. Not really needed
@@ -317,7 +317,9 @@ void Node::init_imu_sub()
   auto const imu_topic_liveliness_lease_duration = std::chrono::milliseconds(get_parameter("imu_topic_liveliness_lease_duration").as_int());
 
   _imu_qos_profile.deadline(imu_topic_deadline);
-  _imu_qos_profile.liveliness(RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC);
+  // _imu_qos_profile.liveliness(RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC);
+  // Likely will need to setup some sort of liveliness QOS later
+  _imu_qos_profile.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
   _imu_qos_profile.liveliness_lease_duration(imu_topic_liveliness_lease_duration);
 
   _imu_sub_options.event_callbacks.deadline_callback =

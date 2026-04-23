@@ -21,8 +21,8 @@ def generate_launch_description():
                 {'teleop_topic_deadline_ms': 0},
                 {'teleop_topic_liveliness_lease_duration': 0},
                 {'imu_topic': '/imu'},
-                {'imu_topic_deadline_ms': 100},
-                {'imu_topic_liveliness_lease_duration': 1000},
+                {'imu_topic_deadline_ms': 0},
+                {'imu_topic_liveliness_lease_duration': 0},
             ]
         ),
         Node(
@@ -55,7 +55,7 @@ def generate_launch_description():
             cmd=[
                 'ros2', 'topic', 'pub', '/imu', 'sensor_msgs/msg/Imu',
                 '{header: {frame_id: "base_link"}, '
-                'linear_acceleration: {x: 0.0, y: 0.0, z: 0.0}, '
+                'linear_acceleration: {x: 0.0, y: 0.0, z: 9.81}, '
                 'angular_velocity: {x: 0.0, y: 0.0, z: 0.0}, '
                 'orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}',
                 '-r', '10'  # Publishes at 10Hz
