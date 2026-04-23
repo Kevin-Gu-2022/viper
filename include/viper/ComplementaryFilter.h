@@ -38,7 +38,7 @@ protected:
 
     if (!_initialised)
     {
-      // Seed attitude from gravity
+      // Seed attitude from gravity, assuming IMU is stationary
       Vector up = acc * (1.0f / acc.norm());
       _attitude = Quaternion::fromBetweenVectors(up, Vector(0, 0, 1));
       _attitude.normalize();
