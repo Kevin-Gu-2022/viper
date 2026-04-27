@@ -15,7 +15,7 @@ def generate_launch_description():
             output='screen',
             emulate_tty=True,
             parameters=[
-                {'can_iface': 'vcan0'},
+                {'can_iface': 'can0'},
                 {'can_node_id': 100},
                 {'teleop_topic': 'cmd_vel'},
                 {'teleop_topic_deadline_ms': 0},
@@ -55,7 +55,7 @@ def generate_launch_description():
             cmd=[
                 'ros2', 'topic', 'pub', '/imu', 'sensor_msgs/msg/Imu',
                 '{header: {frame_id: "base_link"}, '
-                'linear_acceleration: {x: 0.0, y: 0.0, z: 9.81}, '
+                'linear_acceleration: {x: 0.0, y: 0.0, z: 9.80665}, '
                 'angular_velocity: {x: 0.0, y: 0.0, z: 0.0}, '
                 'orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}',
                 '-r', '10'  # Publishes at 10Hz
