@@ -4,6 +4,8 @@
 #include <iostream>
 #include <algorithm>
 
+#include "util.h"
+
 namespace viper {
 
     class Vector {
