@@ -74,7 +74,7 @@ Node::Node()
                                        });
 
   // Initialise the state estimator object (estimator can be interchanged here)
-  _estimator = std::make_unique<ComplementaryFilter>();
+  _estimator = std::make_unique<ExternalEstimator>();
 
   init_teleop_sub();
   init_joy_sub();
@@ -287,6 +287,7 @@ void Node::init_joy_sub()
         bool enable_pressed = (msg->buttons[ENABLE_BUTTON_INDEX] == 1);
         _armed = enable_pressed;
         
+        // !TODO: Check logic here...
         // If deadman switch released, reset target velocities/attitude and reset controllers
         if (!enable_pressed) {
           // Targets from joystick
@@ -348,15 +349,7 @@ void Node::init_imu_sub()
     _imu_qos_profile,
     [this](sensor_msgs::msg::Imu::SharedPtr const msg)
     {
-    //   _imu_data = *msg;
       _estimator->process(*msg);
-
-      // RCLCPP_INFO(get_logger(),
-      //             "IMU Pose (x,y,z,w): %0.2f %0.2f %0.2f %0.2f",
-      //             _imu_data.orientation.x,
-      //             _imu_data.orientation.y,
-      //             _imu_data.orientation.z,
-      //             _imu_data.orientation.w);
     },
     _imu_sub_options);
 }

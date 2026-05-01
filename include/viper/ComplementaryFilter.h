@@ -76,7 +76,7 @@ private:
   {
     Vector up = Quaternion::rotateVector(Vector(0, 0, 1), _attitude);
     // Slowly adjust accelerometer back to true 'up'
-    Vector correction = Vector::rotationVectorBetween(acc, up) * acc_weight;
+    Vector correction = Vector::rotationVectorBetween(up, acc) * acc_weight;
     _attitude = Quaternion::rotate(_attitude, Quaternion::fromRotationVector(correction));
   }
 

@@ -28,6 +28,7 @@
 #include "CanManager.h"
 #include "vector.h"
 #include "ComplementaryFilter.h"
+#include "ExternalEstimator.h"
 #include "CascadedController.h"
 #include "MotorMixer.h"
 
