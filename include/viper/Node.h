@@ -70,20 +70,6 @@ private:
 
   CanardMicrosecond micros();
 
-  rclcpp::QoS _teleop_qos_profile;
-  rclcpp::SubscriptionOptions _teleop_sub_options;
-  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr _teleop_sub;
-  quantity<m/s> _target_linear_velocity_x, _target_linear_velocity_y, _target_linear_velocity_z;
-  quantity<rad/s> _target_angular_velocity_x, _target_angular_velocity_y, _target_angular_velocity_z;
-  void init_teleop_sub();
-
-  rclcpp::QoS _imu_qos_profile;
-  rclcpp::SubscriptionOptions _imu_sub_options;
-  rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr _imu_sub;
-  sensor_msgs::msg::Imu _imu_data;
-  void init_imu_sub();
-
-
   static uint16_t constexpr CYPHAL_DEMO_PORT_ID = 1234;
   cyphal::Publisher<uavcan::primitive::scalar::Integer8_1_0> _cyphal_demo_pub;
 
@@ -100,11 +86,6 @@ private:
   static uint16_t constexpr SETPOINT_VELOCITY_ID_4 = 116;
   cyphal::Publisher<zubax::primitive::real16::Vector4_1_0> _setpoint_velocity_pub_4;
     
-
-    
-    
-
-
 
   static std::chrono::milliseconds constexpr CTRL_LOOP_RATE{10};
   rclcpp::TimerBase::SharedPtr _ctrl_loop_timer;

@@ -12,20 +12,14 @@ def generate_launch_description():
             output='screen',
             emulate_tty=True,
             parameters=[
-                {'can_iface': 'can0'},
+                {'can_iface': 'vcan0'},
                 {'can_node_id': 100},
-                {'teleop_topic': 'cmd_vel'},
-                {'teleop_topic_deadline_ms': 100},
-                {'teleop_topic_liveliness_lease_duration': 1000},
-                {'imu_topic': '/imu'},
-                {'imu_topic_deadline_ms': 100},
-                {'imu_topic_liveliness_lease_duration': 1000},
             ]
         ),
-        ExecuteProcess(
-            cmd=['ros2', 'topic', 'echo', 'imu'],
-            output='screen',
-            additional_env={'period': '0.1', 'msg': '[100, 100, 100, 100]', 'topic': '113:zubax.primitive.real16.Vector4'}
-        ),
+        # ExecuteProcess(
+        #     cmd=['ros2', 'topic', 'echo', 'imu'],
+        #     output='screen',
+        #     additional_env={'period': '0.1', 'msg': '[100, 100, 100, 100]', 'topic': '113:zubax.primitive.real16.Vector4'}
+        # ),
 
     ])

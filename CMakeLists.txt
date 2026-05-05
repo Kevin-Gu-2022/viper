@@ -21,6 +21,9 @@ add_subdirectory(external/mp-units/src)
 #######################################################################################
 include_directories(include)
 #######################################################################################
+
+add_definitions(-Dgsl_FEATURE_GSL_COMPATIBILITY_MODE=1)
+
 add_executable(${VIPER_TARGET}
   src/CanManager.cpp
   src/Node.cpp
