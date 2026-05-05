@@ -8,7 +8,7 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 CAN=can0
-CAN_BITRATE=250000
+CAN_BITRATE=1000000
 GPIO_CAN0_STBY=160
 
 echo "Configuring $CAN for a bitrate of $CAN_BITRATE bits/s"
