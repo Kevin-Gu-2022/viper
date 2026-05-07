@@ -36,4 +36,4 @@ RUN git clone https://github.com/fmtlib/fmt && cd fmt && \
 #     colcon build
 
 # We won't clone 'viper' here anymore; it will be mounted to /work/src
-WORKDIR /workspace
+WORKDIR /workspace/src

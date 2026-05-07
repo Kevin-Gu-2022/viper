@@ -56,6 +56,6 @@ else
        --name $CONTAINER_NAME \
        --privileged \
        --network host \
-       -v "$(pwd)/../..:/workspace" \
+       -v "$(pwd)/../../..:/workspace/src" \
        viper_dev_image bash
 fi
