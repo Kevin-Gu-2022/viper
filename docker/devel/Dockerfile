@@ -1,6 +1,14 @@
 FROM docker.io/arm64v8/ros:humble-ros-base
 # FROM ros:humble-ros-base
 
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    python3-colcon-common-extensions \
+    cmake \
+    git \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /tmp
 
 RUN git clone https://github.com/gsl-lite/gsl-lite && cd gsl-lite && \
@@ -19,10 +27,13 @@ RUN git clone https://github.com/fmtlib/fmt && cd fmt && \
     make -j8 && \
     sudo make install
 
-RUN mkdir -p /tmp/colcon_ws/src
-WORKDIR /tmp/colcon_ws/src
-RUN git clone -b canbus-test --recursive https://github.com/Kevin-Gu-2022/viper
+# RUN mkdir -p /tmp/colcon_ws/src
+# WORKDIR /tmp/colcon_ws/src
+# RUN git clone -b canbus-test --recursive https://github.com/Kevin-Gu-2022/viper
 
-WORKDIR /tmp/colcon_ws
-RUN . /opt/ros/humble/setup.sh && \
-    colcon build
+# WORKDIR /tmp/colcon_ws
+# RUN . /opt/ros/humble/setup.sh && \
+#     colcon build
+
+# We won't clone 'viper' here anymore; it will be mounted to /work/src
+WORKDIR /workspace

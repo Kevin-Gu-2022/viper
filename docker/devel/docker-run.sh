@@ -2,6 +2,9 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# Confirm user in correct directory, otherwise docker run will not create volume correctly
+read -p "Are you in same directory as script (y/n): " confirm && [[ $confirm == [yY] ]] || exit 1
+
 if [ "$(id -u)" != "0" ]; then
   echo "This script must be run as root."
   exit 1
@@ -30,8 +33,29 @@ ip link set $CAN up
 
 sudo -u fio ifconfig $CAN
 
-docker run -it \
-   -u 0 \
-   --privileged \
-   --network host \
-   pika_spark_docker_devel sh
+# Name for container instance
+CONTAINER_NAME="viper_dev_container"
+
+# Check if the container exists (even if stopped)
+if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
+    echo "Container $CONTAINER_NAME found."
+    
+    # Check if it's already running
+    if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+        echo "Container is already running. Entering..."
+    else
+        echo "Starting stopped container..."
+        docker start $CONTAINER_NAME
+    fi
+    
+    # Enter the container
+    docker exec -it $CONTAINER_NAME bash
+else
+    echo "Creating NEW container instance..."
+    docker run -it \
+       --name $CONTAINER_NAME \
+       --privileged \
+       --network host \
+       -v "$(pwd)/../..:/workspace" \
+       viper_dev_image bash
+fi
