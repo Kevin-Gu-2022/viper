@@ -29,6 +29,7 @@ echo out > /sys/class/gpio/gpio$GPIO_CAN0_STBY/direction
 echo 0 > /sys/class/gpio/gpio$GPIO_CAN0_STBY/value
 
 ip link set $CAN type can bitrate $CAN_BITRATE
+ip link set $CAN txqueuelen 256
 ip link set $CAN up
 
 sudo -u fio ifconfig $CAN
@@ -52,10 +53,12 @@ if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
     docker exec -it $CONTAINER_NAME bash
 else
     echo "Creating NEW container instance..."
+
+    # Don't need volume. Just push to the repo
+    #    -v "$(pwd)/../../..:/workspace/src" \
     docker run -it \
        --name $CONTAINER_NAME \
        --privileged \
        --network host \
-       -v "$(pwd)/../../..:/workspace/src" \
-       viper_dev_image bash
+       viper_dev_image /ros_entrypoint.sh bash
 fi
