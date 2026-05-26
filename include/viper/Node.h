@@ -15,6 +15,8 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
+#include <actuator_msgs/msg/actuators.hpp>
 
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joy.hpp>
@@ -113,6 +115,9 @@ private:
 
   static uint16_t constexpr SETPOINT_VELOCITY_ID_4 = 116;
   cyphal::Publisher<zubax::primitive::real16::Vector4_1_0> _setpoint_velocity_pub_4;
+
+  // Publisher for Gazebo motor commands (bridged to Ignition)
+  rclcpp::Publisher<actuator_msgs::msg::Actuators>::SharedPtr _gazebo_motor_pub;
 
   // Attitude control system (default constructor called)
   AttitudeController _attitude_controller;

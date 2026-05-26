@@ -92,6 +92,11 @@ Node::Node()
   _setpoint_velocity_pub_3 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_3, 1*1000*1000UL);
   _setpoint_velocity_pub_4 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_4, 1*1000*1000UL);
 
+  // Create ROS publisher for Gazebo motor commands (to be bridged to Ignition)
+  declare_parameter("gazebo_motor_topic", "/X3/gazebo/command/motor_speed");
+  auto const gazebo_topic = get_parameter("gazebo_motor_topic").as_string();
+  _gazebo_motor_pub = create_publisher<actuator_msgs::msg::Actuators>(gazebo_topic, rclcpp::QoS(10));
+
 
   RCLCPP_INFO(get_logger(), "%s init complete.", get_name());
 }
@@ -237,10 +242,10 @@ void Node::init_teleop_sub()
       _target_angular_velocity.z = static_cast<double>(msg->angular.z);
 
       // Debug: Log controller input changes
-      RCLCPP_INFO(get_logger(),
-                   "PS3 Controller Input - Linear: [x=%.2f, y=%.2f, z=%.2f] m/s | Angular: [x=%.2f, y=%.2f, z=%.2f] rad/s",
-                   msg->linear.x, msg->linear.y, msg->linear.z,
-                   msg->angular.x, msg->angular.y, msg->angular.z);
+      // RCLCPP_INFO(get_logger(),
+      //              "PS3 Controller Input - Linear: [x=%.2f, y=%.2f, z=%.2f] m/s | Angular: [x=%.2f, y=%.2f, z=%.2f] rad/s",
+      //              msg->linear.x, msg->linear.y, msg->linear.z,
+      //              msg->angular.x, msg->angular.y, msg->angular.z);
 
       // === Convert velocity commands to attitude and thrust targets ===
       
@@ -402,8 +407,22 @@ void Node::ctrl_loop()
   _setpoint_velocity_pub_3->publish(motor_msg);
   _setpoint_velocity_pub_4->publish(motor_msg);
 
+  // Publish to ROS topic so ros_gz_bridge can forward to Gazebo
+  if (_gazebo_motor_pub) {
+    actuator_msgs::msg::Actuators gz_msg;
+
+    gz_msg.velocity = {
+      static_cast<float>(motor_commands[0] * MOTOR_SCALE),
+      static_cast<float>(motor_commands[1] * MOTOR_SCALE),
+      static_cast<float>(motor_commands[2] * MOTOR_SCALE),
+      static_cast<float>(motor_commands[3] * MOTOR_SCALE),
+    };
+
+    _gazebo_motor_pub->publish(gz_msg);
+  }
+
   // Optional: Log controller state for debugging
-  if (true) {  // Set to true for verbose logging
+  if (false) {  // Set to true for verbose logging
     Vector attitude_euler = attitude_current.toEuler();
     RCLCPP_INFO(get_logger(),
       "Attitude (deg): roll=%.1f pitch=%.1f yaw=%.1f | "

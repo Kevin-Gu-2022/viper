@@ -41,8 +41,7 @@ def generate_launch_description():
             namespace=ns,
             output='screen',
             emulate_tty=True,
-            # YAML file is copied to the /install dir when building
-            parameters=[PathJoinSubstitution([FindPackageShare('viper'), 'config', 'joystick_params.yaml'])]  
+            parameters=[PathJoinSubstitution([FindPackageShare('viper'), 'config', 'joystick_params.yaml'])]
         ),
         # Connect Pika Spark's running IMU driver that publishes on /imu
         # ExecuteProcess(
@@ -62,6 +61,25 @@ def generate_launch_description():
                 '-r', '11'  # Publishes at 10Hz
             ],
             # output='screen'
+        ),
+
+        # Start Ignition Gazebo with the world for the simulation
+        # Start Gazebo independently
+        ExecuteProcess(
+            cmd=['ign', 'gazebo', PathJoinSubstitution([FindPackageShare('viper'), 'gazebo', 'worlds', 'world.sdf'])],
+            output='screen'
+        ),
+        
+
+        # Bridge ROS topic to Ignition so motor commands reach the model
+        Node(
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            name='ros_gz_bridge',
+            output='screen',
+            parameters=[
+                {"config_file": PathJoinSubstitution([FindPackageShare('viper'), 'gazebo', 'config', 'bridge.yaml'])}
+            ]
         ),
 
     ])

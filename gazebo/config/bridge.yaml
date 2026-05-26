@@ -1,0 +1,8 @@
+# ROS-Gazebo Bridge Configuration
+# Bridges ROS 2 topics to Ignition Gazebo
+# Motor commands bridge
+- ros_topic_name: "/X3/gazebo/command/motor_speed"
+  gz_topic_name: "/X3/gazebo/command/motor_speed"
+  ros_type_name: "actuator_msgs/msg/Actuators"
+  gz_type_name: "ignition.msgs.Actuators"
+  direction: ROS_TO_GZ
