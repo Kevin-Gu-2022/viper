@@ -9,6 +9,7 @@
  **************************************************************************************/
 
 #include <viper/Node.h>
+#include <rcl_interfaces/msg/parameter_event.hpp>
 
 /**************************************************************************************
  * NAMESPACE
@@ -22,7 +23,7 @@ namespace viper
  **************************************************************************************/
 
 Node::Node()
-: rclcpp::Node("viper_node")
+: rclcpp::Node("viper_node", rclcpp::NodeOptions().allow_undeclared_parameters(true))
 , _node_heap{}
 , _node_hdl{_node_heap.data(),
             _node_heap.size(),
@@ -40,6 +41,7 @@ Node::Node()
 , _target_linear_velocity{}  // Zero target linear velocity (PS3 controller)
 , _target_angular_velocity{}  // Zero target angular velocity (PS3 controller)
 , _armed(false)
+, _joy_enable_button_index(0)
 , _imu_qos_profile{rclcpp::KeepLast(10), rmw_qos_profile_sensor_data}
 , _attitude_target(1.0f, 0.0f, 0.0f, 0.0f)  // Initialize to level attitude (identity quaternion)
 , _thrust_target(0.0f)
@@ -75,6 +77,17 @@ Node::Node()
 
   // Initialise the state estimator object (estimator can be interchanged here)
   _estimator = std::make_unique<ExternalEstimator>();
+
+  declare_parameter("enable_button", 0);
+  _joy_enable_button_index = get_parameter("enable_button").as_int();
+
+  _parameter_event_sub = create_subscription<rcl_interfaces::msg::ParameterEvent>(
+    "/parameter_events",
+    rclcpp::QoS(10),
+    [this](rcl_interfaces::msg::ParameterEvent::SharedPtr event)
+    {
+      on_parameter_event(event);
+    });
 
   init_teleop_sub();
   init_joy_sub();
@@ -286,11 +299,16 @@ void Node::init_joy_sub()
     rclcpp::QoS(10),
     [this](sensor_msgs::msg::Joy::SharedPtr const msg)
     {
-      // Check enable button (button 7 = Right Bumper/R1)
-      const int ENABLE_BUTTON_INDEX = 7;
-      if (msg->buttons.size() > ENABLE_BUTTON_INDEX) {
-        bool enable_pressed = (msg->buttons[ENABLE_BUTTON_INDEX] == 1);
+      // Check enable button (whatever enable_button is set to in joystick_params.yaml)
+      const int enable_button_index = _joy_enable_button_index;
+      // Bounds check on button index
+      if (enable_button_index >= 0 && msg->buttons.size() > static_cast<size_t>(enable_button_index)) {
+        bool enable_pressed = (msg->buttons[enable_button_index] == 1);
         _armed = enable_pressed;
+
+        RCLCPP_INFO(get_logger(),
+              "Armed Status: %d, Index: %d",
+              _armed, _joy_enable_button_index);
         
         // !TODO: Check logic here...
         // If deadman switch released, reset target velocities/attitude and reset controllers
@@ -462,23 +480,14 @@ void Node::declare_control_parameters()
   // Velocity to attitude mapping
   declare_parameter("max_tilt_angle", 0.5236);  // 30 degrees in radians
 
-  // Load and apply parameters
-  on_parameter_changed();
-
-  // Add parameter change callback for live tuning
-  auto handle = add_on_set_parameters_callback([this](const std::vector<rclcpp::Parameter> & params) {
-    (void)params;  // Suppress unused parameter warning
-    on_parameter_changed();
-    rcl_interfaces::msg::SetParametersResult result;
-    result.successful = true;
-    result.reason = "";
-    return result;
-  });
+  // Load initial parameter values
+  load_parameters();
 }
 
-
-void Node::on_parameter_changed()
+void Node::load_parameters()
 {
+  _joy_enable_button_index = get_parameter("enable_button").as_int();
+
   // Update attitude controller gains
   _attitude_controller.set_gains(
     static_cast<float>(get_parameter("attitude_roll_p").as_double()),
@@ -508,19 +517,43 @@ void Node::on_parameter_changed()
     static_cast<float>(get_parameter("rate_integral_windup").as_double());
   _rate_controller.get_yaw_pid().windup_limit = 
     static_cast<float>(get_parameter("rate_integral_windup").as_double());
-
-    // Should be setting the cutoff instead
-  // _rate_controller.get_roll_pid().d_alpha = 
-  //   static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
-  // _rate_controller.get_pitch_pid().d_alpha = 
-  //   static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
-  // _rate_controller.get_yaw_pid().d_alpha = 
-  //   static_cast<float>(get_parameter("rate_derivative_filter_alpha").as_double());
 }
 
+void Node::on_parameter_event(rcl_interfaces::msg::ParameterEvent::SharedPtr event)
+{
+  // Skip if not from this node
+  if (event->node != "/viper/viper")
+  {
+    return;
+  }
 
-/**************************************************************************************
- * NAMESPACE
- **************************************************************************************/
+  auto const parameter_matches = [](const auto & param) -> bool
+  {
+    return param.name == "enable_button" ||
+           param.name == "attitude_roll_p" ||
+           param.name == "attitude_pitch_p" ||
+           param.name == "attitude_yaw_p" ||
+           param.name == "rate_roll_p" ||
+           param.name == "rate_roll_i" ||
+           param.name == "rate_roll_d" ||
+           param.name == "rate_pitch_p" ||
+           param.name == "rate_pitch_i" ||
+           param.name == "rate_pitch_d" ||
+           param.name == "rate_yaw_p" ||
+           param.name == "rate_yaw_i" ||
+           param.name == "rate_yaw_d" ||
+           param.name == "rate_integral_windup" ||
+           param.name == "rate_derivative_filter_alpha";
+  };
 
-} /* viper */
+    for (auto const & p : event->changed_parameters)
+    {
+      if (parameter_matches(p))
+      {
+        load_parameters();
+        RCLCPP_INFO(get_logger(), "Parameter event loaded from %s", event->node.c_str());
+        return;
+      }
+    }
+  }  
+}

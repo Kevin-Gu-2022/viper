@@ -23,6 +23,7 @@ def generate_launch_description():
                 {'imu_topic': '/imu'},
                 {'imu_topic_deadline_ms': 0},
                 {'imu_topic_liveliness_lease_duration': 0},
+                PathJoinSubstitution([FindPackageShare('viper'), 'config', 'joystick_params.yaml'])
             ]
         ),
         Node(

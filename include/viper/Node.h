@@ -21,6 +21,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joy.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <rcl_interfaces/msg/parameter_event.hpp>
 
 #include <cyphal++/cyphal++.h>
 
@@ -91,13 +92,16 @@ private:
 
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr _joy_sub;
   bool _armed;
+  int _joy_enable_button_index;
   void init_joy_sub();
 
   rclcpp::QoS _imu_qos_profile;
   rclcpp::SubscriptionOptions _imu_sub_options;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr _imu_sub;
+  rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr _parameter_event_sub;
 //   sensor_msgs::msg::Imu _imu_data; // Removed. Replaced with new Estimator class
   void init_imu_sub();
+  void on_parameter_event(rcl_interfaces::msg::ParameterEvent::SharedPtr event);
 
 
   static uint16_t constexpr CYPHAL_DEMO_PORT_ID = 1234;
@@ -130,7 +134,7 @@ private:
   
   // Declare parameters for tuning
   void declare_control_parameters();
-  void on_parameter_changed();
+  void load_parameters();
 
   // ctrl_loop variables
   static std::chrono::milliseconds constexpr CTRL_LOOP_RATE{10};

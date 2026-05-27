@@ -18,11 +18,13 @@ def generate_launch_description():
                 {'can_iface': 'vcan0'},
                 {'can_node_id': 100},
                 {'teleop_topic': 'cmd_vel'},
+                # There's a QoS profile mismatch between teleop_twist_joy_node and viper if these are not turned off
                 {'teleop_topic_deadline_ms': 0},
                 {'teleop_topic_liveliness_lease_duration': 0},
                 {'imu_topic': '/imu'},
                 {'imu_topic_deadline_ms': 0},
                 {'imu_topic_liveliness_lease_duration': 0},
+                PathJoinSubstitution([FindPackageShare('viper'), 'config', 'joystick_params.yaml'])
             ]
         ),
         Node(
