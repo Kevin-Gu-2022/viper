@@ -1,4 +1,5 @@
 <sdf version="1.6">
+    <!--  The following section here defines the physical properties of the model -->
     <model name="viper">
         <pose>0 0 0.053302 0 0 0</pose>
         <link name="X3/base_link">
@@ -28,10 +29,30 @@
                 <geometry>
                     <mesh>
                         <scale>1 1 1</scale>
+                        <!-- Pull in 3D model from Gazebo Fuel -->
                         <uri>https://fuel.ignitionrobotics.org/1.0/openrobotics/models/x3 uav/4/files/meshes/x3.dae</uri>
                     </mesh>
                 </geometry>
             </visual>
+            <!-- Add IMU sensor to main body -->
+            <sensor name="imu_sensor" type="imu">
+                <always_on>1</always_on>
+                <update_rate>100</update_rate>
+                <visualize>true</visualize>
+                <topic>gazebo/imu</topic>
+                <imu>
+                <angular_velocity>
+                    <x><noise type="gaussian"><mean>0</mean><stddev>0.001</stddev></noise></x>
+                    <y><noise type="gaussian"><mean>0</mean><stddev>0.001</stddev></noise></y>
+                    <z><noise type="gaussian"><mean>0</mean><stddev>0.001</stddev></noise></z>
+                </angular_velocity>
+                <linear_acceleration>
+                    <x><noise type="gaussian"><mean>0</mean><stddev>0.001</stddev></noise></x>
+                    <y><noise type="gaussian"><mean>0</mean><stddev>0.001</stddev></noise></y>
+                    <z><noise type="gaussian"><mean>0</mean><stddev>0.001</stddev></noise></z>
+                </linear_acceleration>
+                </imu>
+            </sensor>
         </link>
         <link name="X3/rotor_0">
             <pose frame="">0.13 -0.22 0.023 0 -0 0</pose>
@@ -294,7 +315,7 @@
             </axis>
         </joint>
 
-        <!-- Motors -->
+        <!-- Motors - initialise the motors with parameters -->
         <plugin
           filename="ignition-gazebo-multicopter-motor-model-system"
           name="gz::sim::systems::MulticopterMotorModel">
@@ -321,7 +342,7 @@
           <robotNamespace>X3</robotNamespace>
           <jointName>X3/rotor_1_joint</jointName>
           <linkName>X3/rotor_1</linkName>
-          <turningDirection>ccw</turningDirection>
+          <turningDirection>cw</turningDirection>
           <timeConstantUp>0.0125</timeConstantUp>
           <timeConstantDown>0.025</timeConstantDown>
           <maxRotVelocity>800.0</maxRotVelocity>
@@ -341,7 +362,7 @@
           <robotNamespace>X3</robotNamespace>
           <jointName>X3/rotor_2_joint</jointName>
           <linkName>X3/rotor_2</linkName>
-          <turningDirection>cw</turningDirection>
+          <turningDirection>ccw</turningDirection>
           <timeConstantUp>0.0125</timeConstantUp>
           <timeConstantDown>0.025</timeConstantDown>
           <maxRotVelocity>800.0</maxRotVelocity>

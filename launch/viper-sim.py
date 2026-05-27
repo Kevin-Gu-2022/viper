@@ -51,20 +51,19 @@ def generate_launch_description():
         # ),
 
         # Simulated 0 IMU
-        ExecuteProcess(
-            cmd=[
-                'ros2', 'topic', 'pub', '/imu', 'sensor_msgs/msg/Imu',
-                '{header: {frame_id: "base_link"}, '
-                'linear_acceleration: {x: 0.0, y: 0.0, z: 9.80665}, '
-                'angular_velocity: {x: 0.0, y: 0.0, z: 0.0}, '
-                'orientation: {x: 0.01, y: 0.02, z: 0.0, w: 1.0}}',
-                '-r', '11'  # Publishes at 10Hz
-            ],
-            # output='screen'
-        ),
+        # ExecuteProcess(
+        #     cmd=[
+        #         'ros2', 'topic', 'pub', '/imu', 'sensor_msgs/msg/Imu',
+        #         '{header: {frame_id: "base_link"}, '
+        #         'linear_acceleration: {x: 0.0, y: 0.0, z: 9.80665}, '
+        #         'angular_velocity: {x: 0.0, y: 0.0, z: 0.0}, '
+        #         'orientation: {x: 0.01, y: 0.02, z: 0.0, w: 1.0}}',
+        #         '-r', '11'  # Publishes at 10Hz
+        #     ],
+        #     # output='screen'
+        # ),
 
         # Start Ignition Gazebo with the world for the simulation
-        # Start Gazebo independently
         ExecuteProcess(
             cmd=['ign', 'gazebo', PathJoinSubstitution([FindPackageShare('viper'), 'gazebo', 'worlds', 'world.sdf'])],
             output='screen'

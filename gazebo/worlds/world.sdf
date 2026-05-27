@@ -2,8 +2,8 @@
 
 <sdf version="1.6">
   <world name="quadcopter_teleop">
-    <physics name="4ms" type="ignored">
-      <max_step_size>0.004</max_step_size>
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
     <plugin
@@ -22,6 +22,11 @@
       filename="ignition-gazebo-sensors-system"
       name="ignition::gazebo::systems::Sensors">
       <render_engine>ogre2</render_engine>
+    </plugin>
+    <!-- Plugin for the IMU -->
+    <plugin
+      filename="libignition-gazebo-imu-system.so"
+      name="ignition::gazebo::systems::Imu">
     </plugin>
 
     <scene>
@@ -42,6 +47,8 @@
         <scene>scene</scene>
         <ambient_light>0.4 0.4 0.4</ambient_light>
         <background_color>0.8 0.8 0.8</background_color>
+        <!-- Camera is behind, with x pointing forward, y left, z up -->
+        <camera_pose>-1 -1 1 0 0.3 0.785</camera_pose>
         <camera_follow>
           <target>X3</target>
           <p_gain>0.5</p_gain>
@@ -109,13 +116,6 @@
         <real_time_factor>true</real_time_factor>
         <iterations>true</iterations>
       </plugin>
-
-      <!-- <plugin filename="Teleop" name="Teleop">
-        <ignition-gui>
-          <property type="string" key="state">docked</property>
-        </ignition-gui>
-        <topic>/X3/cmd_vel</topic>
-      </plugin> -->
     </gui>
 
     <light type="directional" name="sun">
