@@ -66,12 +66,7 @@ Node::Node()
 
   _ctrl_loop_timer = create_wall_timer(CTRL_LOOP_RATE, [this]() { this->ctrl_loop(); });
 
-  _cyphal_demo_pub = _node_hdl.create_publisher<uavcan::primitive::scalar::Integer8_1_0>(CYPHAL_DEMO_PORT_ID, 1*1000*1000UL);
-
   _setpoint_velocity_pub_1 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_1, 1*1000*1000UL);
-  _setpoint_velocity_pub_2 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_2, 1*1000*1000UL);
-  _setpoint_velocity_pub_3 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_3, 1*1000*1000UL);
-  _setpoint_velocity_pub_4 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_4, 1*1000*1000UL);
 
 
   RCLCPP_INFO(get_logger(), "%s init complete.", get_name());
@@ -154,9 +149,6 @@ void Node::ctrl_loop()
 
     // Publish motor commands to all 4 motors
   _setpoint_velocity_pub_1->publish(motor_msg);
-  _setpoint_velocity_pub_2->publish(motor_msg);
-  _setpoint_velocity_pub_3->publish(motor_msg);
-  _setpoint_velocity_pub_4->publish(motor_msg);
 
 }
 

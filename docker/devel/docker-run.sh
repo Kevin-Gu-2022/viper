@@ -3,7 +3,7 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # Confirm user in correct directory, otherwise docker run will not create volume correctly
-read -p "Are you in same directory as script (y/n): " confirm && [[ $confirm == [yY] ]] || exit 1
+# read -p "Are you in same directory as script (y/n): " confirm && [[ $confirm == [yY] ]] || exit 1
 
 if [ "$(id -u)" != "0" ]; then
   echo "This script must be run as root."

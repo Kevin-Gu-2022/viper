@@ -57,7 +57,7 @@ private:
   std::mutex _node_mtx;
   std::chrono::steady_clock::time_point const _node_start;
   std::unique_ptr<CanManager> _can_mgr;
-  static std::chrono::milliseconds constexpr NODE_LOOP_RATE{1};
+  static std::chrono::microseconds constexpr NODE_LOOP_RATE{100};
   rclcpp::TimerBase::SharedPtr _node_loop_timer;
 
   cyphal::Publisher<uavcan::node::Heartbeat_1_0> _cyphal_heartbeat_pub;
@@ -70,22 +70,8 @@ private:
 
   CanardMicrosecond micros();
 
-  static uint16_t constexpr CYPHAL_DEMO_PORT_ID = 1234;
-  cyphal::Publisher<uavcan::primitive::scalar::Integer8_1_0> _cyphal_demo_pub;
-
   static uint16_t constexpr SETPOINT_VELOCITY_ID_1 = 113;
   cyphal::Publisher<zubax::primitive::real16::Vector4_1_0> _setpoint_velocity_pub_1;
-
-  static uint16_t constexpr SETPOINT_VELOCITY_ID_2 = 114;
-  cyphal::Publisher<zubax::primitive::real16::Vector4_1_0> _setpoint_velocity_pub_2;
-
-
-  static uint16_t constexpr SETPOINT_VELOCITY_ID_3 = 115;
-  cyphal::Publisher<zubax::primitive::real16::Vector4_1_0> _setpoint_velocity_pub_3;
-
-  static uint16_t constexpr SETPOINT_VELOCITY_ID_4 = 116;
-  cyphal::Publisher<zubax::primitive::real16::Vector4_1_0> _setpoint_velocity_pub_4;
-    
 
   static std::chrono::milliseconds constexpr CTRL_LOOP_RATE{10};
   rclcpp::TimerBase::SharedPtr _ctrl_loop_timer;
