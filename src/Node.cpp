@@ -47,7 +47,6 @@ Node::Node()
 , _thrust_target(0.0f)
 {
   init_cyphal_heartbeat();
-  init_cyphal_node_info();
 
   declare_parameter("can_iface", "can0");
   declare_parameter("can_node_id", 100);
@@ -98,16 +97,12 @@ Node::Node()
 
   _ctrl_loop_timer = create_wall_timer(CTRL_LOOP_RATE, [this]() { this->ctrl_loop(); });
 
-  _cyphal_demo_pub = _node_hdl.create_publisher<uavcan::primitive::scalar::Integer8_1_0>(CYPHAL_DEMO_PORT_ID, 1*1000*1000UL);
-
-  _setpoint_velocity_pub_1 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_1, 1*1000*1000UL);
-  _setpoint_velocity_pub_2 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_2, 1*1000*1000UL);
-  _setpoint_velocity_pub_3 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_3, 1*1000*1000UL);
-  _setpoint_velocity_pub_4 = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID_4, 1*1000*1000UL);
+  _setpoint_velocity_pub = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID, 1*1000*1000UL);
 
   // Create ROS publisher for Gazebo motor commands (to be bridged to Ignition)
-  declare_parameter("gazebo_motor_topic", "/X3/gazebo/command/motor_speed");
-  auto const gazebo_topic = get_parameter("gazebo_motor_topic").as_string();
+  // declare_parameter("gazebo_motor_topic", "/X3/gazebo/command/motor_speed");
+  // auto const gazebo_topic = get_parameter("gazebo_motor_topic").as_string();
+  auto const gazebo_topic = "motor_speed";
   _gazebo_motor_pub = create_publisher<actuator_msgs::msg::Actuators>(gazebo_topic, rclcpp::QoS(10));
 
 
@@ -145,28 +140,6 @@ void Node::init_cyphal_heartbeat()
 
                                                 }
                                               });
-}
-
-void Node::init_cyphal_node_info()
-{
-  _cyphal_node_info = _node_hdl.create_node_info(
-    /* uavcan.node.Version.1.0 protocol_version */
-    1, 0,
-    /* uavcan.node.Version.1.0 hardware_version */
-    1, 0,
-    /* uavcan.node.Version.1.0 software_version */
-    0, 1,
-    /* saturated uint64 software_vcs_revision_id */
-#ifdef CYPHAL_NODE_INFO_GIT_VERSION
-    CYPHAL_NODE_INFO_GIT_VERSION,
-#else
-    0,
-#endif
-    /* saturated uint8[16] unique_id */
-    std::array<uint8_t, 16>{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F},
-    /* saturated uint8[<=50] name */
-    "107-systems.viper"
-  );
 }
 
 CanardMicrosecond Node::micros()
@@ -285,6 +258,8 @@ void Node::init_teleop_sub()
 
       _attitude_target = Quaternion::fromEuler(Vector(roll_target, pitch_target, _target_angular_velocity.z));
 
+      RCLCPP_INFO(get_logger(), "Pitch Target: %.2f, Roll Target: %.2f", pitch_target * 180 / M_PI, roll_target * 180 / M_PI);
+
       // Map thrust: linear.z velocity (up/down) to throttle [0, 1]
       // Assuming 0 m/s = hover (0.5), positive = up, negative = down
       _thrust_target = std::clamp(0.5f + static_cast<float>(msg->linear.z) * 0.5f, 0.0f, 1.0f);
@@ -306,10 +281,6 @@ void Node::init_joy_sub()
         bool enable_pressed = (msg->buttons[enable_button_index] == 1);
         _armed = enable_pressed;
 
-        RCLCPP_INFO(get_logger(),
-              "Armed Status: %d, Index: %d",
-              _armed, _joy_enable_button_index);
-        
         // !TODO: Check logic here...
         // If deadman switch released, reset target velocities/attitude and reset controllers
         if (!enable_pressed) {
@@ -380,7 +351,16 @@ void Node::init_imu_sub()
 void Node::ctrl_loop()
 {
 
-  // !TODO Add somewhere here: return if landed
+  // Will not publish anything when enable button not pressed
+  if (!_armed) {
+    // Must explicitly tell the Gazebo plugin that motors are off
+    if (_gazebo_motor_pub) {
+      actuator_msgs::msg::Actuators gz_msg;
+      gz_msg.velocity = {0.0, 0.0, 0.0, 0.0};
+      _gazebo_motor_pub->publish(gz_msg);
+    }
+    return;
+  }
   
   // This only fetches latest estimate. The estimator is decoupled
   // and constantly running while new IMU data coming in 
@@ -404,42 +384,41 @@ void Node::ctrl_loop()
 
   // Motor Mixer
   // Inputs: thrust, torques
-  // Output: 4 motor commands [0, 1]
+  // Output: 4 normalised motor commands, i.e. [0, 1]
   auto motor_commands = _motor_mixer.mix(_thrust_target, torque_target);
 
-  // Scale motor commands to appropriate range for Cyphal message
-  // The motor controller expects values in some range (e.g., 0-255 or 0-1)
-  // Adjust the scaling factor based on your motor controller's input requirements
-  const float MOTOR_SCALE = 1000.0f;  // Scale to 0-1000 range for visualization/control
+  // Scale motor commands to appropriate range
+  const float MOTOR_SCALE = 100.0f;
+  // Gazebo sim slows velocity down by factor of 10, increasing numerical stability (i.e. removes need to deal with really small numbers)
+  const float SIM_SLOWDOWN_SCALE = 10.0f;
+  // We must offset the commands by at least 10 rad/s otherwise ESC will think they're stalled
+  const float LOWER_STALL_LIMIT = 10.0f;
   
   zubax::primitive::real16::Vector4_1_0 motor_msg{
-    motor_commands[0] * MOTOR_SCALE,
-    motor_commands[1] * MOTOR_SCALE,
-    motor_commands[2] * MOTOR_SCALE,
-    motor_commands[3] * MOTOR_SCALE
+    motor_commands[0] * MOTOR_SCALE + LOWER_STALL_LIMIT,
+    motor_commands[1] * MOTOR_SCALE + LOWER_STALL_LIMIT,
+    motor_commands[2] * MOTOR_SCALE + LOWER_STALL_LIMIT,
+    motor_commands[3] * MOTOR_SCALE + LOWER_STALL_LIMIT
   };
 
-  // Publish motor commands to all 4 motors
-  _setpoint_velocity_pub_1->publish(motor_msg);
-  _setpoint_velocity_pub_2->publish(motor_msg);
-  _setpoint_velocity_pub_3->publish(motor_msg);
-  _setpoint_velocity_pub_4->publish(motor_msg);
+  // Publish Cyphal motor commands to all 4 motors
+  _setpoint_velocity_pub->publish(motor_msg);
 
-  // Publish to ROS topic so ros_gz_bridge can forward to Gazebo
+  // Publish to ROS topic as well so ros_gz_bridge can forward to Gazebo
   if (_gazebo_motor_pub) {
     actuator_msgs::msg::Actuators gz_msg;
 
     gz_msg.velocity = {
-      static_cast<float>(motor_commands[0] * MOTOR_SCALE),
-      static_cast<float>(motor_commands[1] * MOTOR_SCALE),
-      static_cast<float>(motor_commands[2] * MOTOR_SCALE),
-      static_cast<float>(motor_commands[3] * MOTOR_SCALE),
+      static_cast<float>((motor_commands[0] * MOTOR_SCALE + LOWER_STALL_LIMIT) * SIM_SLOWDOWN_SCALE),
+      static_cast<float>((motor_commands[1] * MOTOR_SCALE + LOWER_STALL_LIMIT) * SIM_SLOWDOWN_SCALE),
+      static_cast<float>((motor_commands[2] * MOTOR_SCALE + LOWER_STALL_LIMIT) * SIM_SLOWDOWN_SCALE),
+      static_cast<float>((motor_commands[3] * MOTOR_SCALE + LOWER_STALL_LIMIT) * SIM_SLOWDOWN_SCALE),
     };
 
     _gazebo_motor_pub->publish(gz_msg);
   }
 
-  // Optional: Log controller state for debugging
+  // Log controller state
   if (false) {  // Set to true for verbose logging
     Vector attitude_euler = attitude_current.toEuler();
     RCLCPP_INFO(get_logger(),
@@ -478,7 +457,7 @@ void Node::declare_control_parameters()
   declare_parameter("rate_derivative_filter_alpha", 0.2);
 
   // Velocity to attitude mapping
-  declare_parameter("max_tilt_angle", 0.5236);  // 30 degrees in radians
+  declare_parameter("max_tilt_angle", 0.2618);  // 30 degrees in radians
 
   // Load initial parameter values
   load_parameters();
@@ -517,6 +496,9 @@ void Node::load_parameters()
     static_cast<float>(get_parameter("rate_integral_windup").as_double());
   _rate_controller.get_yaw_pid().windup_limit = 
     static_cast<float>(get_parameter("rate_integral_windup").as_double());
+
+
+    // !TODO: Add parameter changes to alpha value. It's currently skipped now
 }
 
 void Node::on_parameter_event(rcl_interfaces::msg::ParameterEvent::SharedPtr event)

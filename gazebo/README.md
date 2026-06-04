@@ -25,18 +25,20 @@ ign service -s /world/quadcopter_teleop/set_pose \
 
 ## Directory Structure
 ```bash
-gazebo/
+gazebo
 ├── config
 │   └── bridge.yaml
+├── env-hooks
+│   └── viper.dsv.in  # Defines the IGN_GAZEBO_RESOURCE_PATH
 ├── models
 │   └── viper
-│       ├── model.config  # Needed for loading viper.sdf
-│       └── viper.sdf
+│       ├── model.config  # Needed for loading model file correctly using the models/viper directory
+│       └── model.sdf
 ├── README.md
 └── worlds
     └── world.sdf
 ```
 
-This will allow Gazebo to find the correct model file.
+`IGN_GAZEBO_RESOURCE_PATH` curently points to `gazebo` directory. This allows launching of Gazebo simulation independently by just calling `ign gazbeo worlds/world.sdf` from `gazebo` directory.
 
 
