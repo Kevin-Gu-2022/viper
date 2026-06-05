@@ -65,7 +65,7 @@ public:
         // feed-forward `rates_extra.z` (e.g. commanded yaw rate).
         Quaternion q_err = Quaternion::between(attitude_target, attitude_current);
         float yaw_error = q_err.getYaw();
-        float yaw_rate_target = yaw_pid_.update(yaw_error) - rates_extra.z;
+        float yaw_rate_target = yaw_pid_.update(yaw_error) + rates_extra.z;
 
         return Vector(roll_rate_target, pitch_rate_target, yaw_rate_target);
     }
