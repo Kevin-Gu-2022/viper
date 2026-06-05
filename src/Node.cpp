@@ -44,6 +44,7 @@ Node::Node()
 , _joy_enable_button_index(0)
 , _imu_qos_profile{rclcpp::KeepLast(10), rmw_qos_profile_sensor_data}
 , _attitude_target(1.0f, 0.0f, 0.0f, 0.0f)  // Initialize to level attitude (identity quaternion)
+, _yaw_target(NAN)
 , _thrust_target(0.0f)
 {
   init_cyphal_heartbeat();
@@ -227,38 +228,30 @@ void Node::init_teleop_sub()
       _target_angular_velocity.y = static_cast<double>(msg->angular.y);
       _target_angular_velocity.z = static_cast<double>(msg->angular.z);
 
-      // Debug: Log controller input changes
-      // RCLCPP_INFO(get_logger(),
-      //              "PS3 Controller Input - Linear: [x=%.2f, y=%.2f, z=%.2f] m/s | Angular: [x=%.2f, y=%.2f, z=%.2f] rad/s",
-      //              msg->linear.x, msg->linear.y, msg->linear.z,
-      //              msg->angular.x, msg->angular.y, msg->angular.z);
-
       // === Convert velocity commands to attitude and thrust targets ===
       
       // Get max tilt angle from parameters
-      float max_tilt = static_cast<float>(get_parameter("max_tilt_angle").as_double());
+      // float max_tilt = static_cast<float>(get_parameter("max_tilt_angle").as_double());
 
       // Compute desired attitude from linear velocities
       // linear.x → pitch (forward/backward)
       // linear.y → roll (lateral)
       // These two are scaled to not exceed max_tilt_angle
-      float pitch_target = 0.0f;
-      float roll_target = 0.0f;
+      // float pitch_target = 0.0f;
+      // float roll_target = 0.0f;
 
       // Simple velocity to angle mapping (can be tuned)
       // Assuming teleop max velocities are around ±1 m/s
-      if (std::abs(msg->linear.x) > 1e-3 || std::abs(msg->linear.y) > 1e-3) {
-        float vz_max = 1.0f;  // Expected max velocity in m/s
-        pitch_target = std::clamp(static_cast<float>(msg->linear.x) / vz_max, -1.0f, 1.0f) * max_tilt;
-        roll_target = -std::clamp(static_cast<float>(msg->linear.y) / vz_max, -1.0f, 1.0f) * max_tilt;
-      }
+      // if (std::abs(msg->linear.x) > 1e-3 || std::abs(msg->linear.y) > 1e-3) {
+      //   float vz_max = 1.0f;  // Expected max velocity in m/s
+      //   pitch_target = std::clamp(static_cast<float>(msg->linear.x) / vz_max, -1.0f, 1.0f) * max_tilt;
+      //   roll_target = -std::clamp(static_cast<float>(msg->linear.y) / vz_max, -1.0f, 1.0f) * max_tilt;
+      // }
 
       // Missing this implementation for resetting yaw. Not really needed
       //   if (!armed || yaw_target != 0) yawTarget = attitude.getYaw();
 
-      _attitude_target = Quaternion::fromEuler(Vector(roll_target, pitch_target, _target_angular_velocity.z));
-
-      RCLCPP_INFO(get_logger(), "Pitch Target: %.2f, Roll Target: %.2f", pitch_target * 180 / M_PI, roll_target * 180 / M_PI);
+      // Note: _attitude_target is computed in ctrl_loop() via update_attitude_target()
 
       // Map thrust: linear.z velocity (up/down) to throttle [0, 1]
       // Assuming 0 m/s = hover (0.5), positive = up, negative = down
@@ -291,6 +284,7 @@ void Node::init_joy_sub()
           // Targets used in ctrl loop
           _thrust_target = 0.0f;
           _attitude_target = Quaternion(1.0f, 0.0f, 0.0f, 0.0f);
+          _yaw_target = NAN;
 
           _attitude_controller.reset();
           _rate_controller.reset();
@@ -370,12 +364,18 @@ void Node::ctrl_loop()
   Quaternion attitude_current = est.orientation;
   Vector     rate_current     = est.angular_rate;
 
+  // Update attitude target based on yaw integration and roll/pitch demands
+  update_attitude_target(attitude_current);
+
   // === Cascaded PID Control Loop ===
 
   // Level 1: Attitude Controller
-  // Inputs: current attitude, target attitude
+  // Inputs: current attitude, target attitude, feedforward rates
   // Output: target angular rates
-  Vector rate_target = _attitude_controller.update(attitude_current, _attitude_target);
+  Vector rate_target = _attitude_controller.update(attitude_current,
+        _attitude_target, _rates_extra);
+  // Vector rate_target = _attitude_controller.update(attitude_current, 
+  //       _attitude_target, Vector(0, 0, -_target_angular_velocity.z * YAWRATE_MAX));
 
   // Level 2: Rate Controller
   // Inputs: target rates, current rates
@@ -499,6 +499,31 @@ void Node::load_parameters()
 
 
     // !TODO: Add parameter changes to alpha value. It's currently skipped now
+}
+
+void Node::update_attitude_target(const Quaternion& attitude_current)
+{
+  // Yaw handling: do NOT integrate heading from stick — leave yaw target
+  // equal to current heading so PID holds heading. Only apply feedforward
+  // yaw rate from the stick and let the PID handle error correction.
+    _yaw_target = attitude_current.getYaw();
+
+  // Feedforward yaw: positive stick = clockwise in FLU => invert sign
+  float controlYaw = static_cast<float>(_target_angular_velocity.z);
+  if (std::abs(controlYaw) < 0.1f) controlYaw = 0.0f;
+  _rates_extra = Vector(0.0f, 0.0f, -controlYaw * static_cast<float>(YAWRATE_MAX));
+  // Compute roll/pitch targets from normalized stick inputs
+  float max_tilt = static_cast<float>(get_parameter("max_tilt_angle").as_double());
+  float pitch_target = 0.0f;
+  float roll_target = 0.0f;
+  if (std::abs(_target_linear_velocity.x) > 1e-3 || std::abs(_target_linear_velocity.y) > 1e-3) {
+    float vz_max = 1.0f;  // Expected max velocity in m/s
+    pitch_target = std::clamp(static_cast<float>(_target_linear_velocity.x) / vz_max, -1.0f, 1.0f) * max_tilt;
+    roll_target = -std::clamp(static_cast<float>(_target_linear_velocity.y) / vz_max, -1.0f, 1.0f) * max_tilt;
+  }
+
+  // Update attitude target with integrated yaw and computed roll/pitch
+  _attitude_target = Quaternion::fromEuler(Vector(roll_target, pitch_target, _yaw_target));
 }
 
 void Node::on_parameter_event(rcl_interfaces::msg::ParameterEvent::SharedPtr event)

@@ -84,7 +84,7 @@ private:
   rclcpp::SubscriptionOptions _teleop_sub_options;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr _teleop_sub;
 
-  // Vectors representing target given from PS3 controller
+  // Vectors representing target given from PS3 controller (dimensionless)
   Vector _target_linear_velocity;
   Vector _target_angular_velocity;
 
@@ -117,11 +117,16 @@ private:
   
   // Control targets
   Quaternion _attitude_target;  // Target attitude (identity = level)
+  float _yaw_target;            // Integrated heading reference for yaw
   float _thrust_target = 0.0f;  // Target collective thrust [0, 1]
+  Vector _rates_extra;          // Feedforward rates (used for yaw feedforward)
   
   // Declare parameters for tuning
   void declare_control_parameters();
   void load_parameters();
+
+  // Helper: Update attitude target based on teleop inputs and integrated yaw
+  void update_attitude_target(const Quaternion& attitude_current);
 
   // ctrl_loop variables
   static std::chrono::milliseconds constexpr CTRL_LOOP_RATE{10};

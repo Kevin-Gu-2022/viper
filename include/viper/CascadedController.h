@@ -7,6 +7,11 @@
 #include "vector.h"
 #include "quaternion.h"
 
+// !TODO: Move all the default values below into #defines here
+
+// Maximum angular rates (roll and pitch rates managed by attitude controller)
+#define YAWRATE_MAX   radians(30)
+
 namespace viper {
 
 /**
@@ -43,7 +48,7 @@ public:
      * @param attitude_target  Target quaternion attitude (w, x, y, z)
      * @return Vector3 Target angular rates (x=roll_rate, y=pitch_rate, z=yaw_rate) in rad/s
      */
-    Vector update(const Quaternion& attitude_current, const Quaternion& attitude_target) {
+    Vector update(const Quaternion& attitude_current, const Quaternion& attitude_target, const Vector& rates_extra = Vector(0, 0, 0)) {
         // Compute attitude error by comparing Vector form of the two arguments
         const Vector up(0, 0, 1);
         Vector upActual = Quaternion::rotateVector(up, attitude_current);
@@ -54,7 +59,13 @@ public:
         // Apply PID gains to get target rates
         float roll_rate_target = roll_pid_.update(error.x);
         float pitch_rate_target = pitch_pid_.update(error.y);
-        float yaw_rate_target = yaw_pid_.update(error.z);
+        // Yaw must be computed from the relative rotation about the up axis
+        // (rotation to bring current heading to target heading). Use
+        // quaternion between to get the relative yaw error and add
+        // feed-forward `rates_extra.z` (e.g. commanded yaw rate).
+        Quaternion q_err = Quaternion::between(attitude_target, attitude_current);
+        float yaw_error = q_err.getYaw();
+        float yaw_rate_target = yaw_pid_.update(yaw_error) - rates_extra.z;
 
         return Vector(roll_rate_target, pitch_rate_target, yaw_rate_target);
     }

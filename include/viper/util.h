@@ -38,6 +38,11 @@ namespace viper
         return angle;
     }
 
+    // Convert degrees to radians
+    inline float radians(float deg) {
+        return static_cast<float>(deg * PI / 180.0);
+    }
+
     // Disable reset on low voltage
     // void disableBrownOut() {
     //     REG_CLR_BIT(RTC_CNTL_BROWN_OUT_REG, RTC_CNTL_BROWN_OUT_ENA);
