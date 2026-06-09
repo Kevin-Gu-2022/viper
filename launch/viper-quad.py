@@ -1,3 +1,6 @@
+"""
+This script launches justthe flight controller node. Script to run when on Pika Spark.
+"""
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess
 from launch_ros.actions import Node
