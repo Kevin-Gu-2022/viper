@@ -101,8 +101,6 @@ Node::Node()
   _setpoint_velocity_pub = _node_hdl.create_publisher<zubax::primitive::real16::Vector4_1_0>(SETPOINT_VELOCITY_ID, 1*1000*1000UL);
 
   // Create ROS publisher for Gazebo motor commands (to be bridged to Ignition)
-  // declare_parameter("gazebo_motor_topic", "/X3/gazebo/command/motor_speed");
-  // auto const gazebo_topic = get_parameter("gazebo_motor_topic").as_string();
   auto const gazebo_topic = "motor_speed";
   _gazebo_motor_pub = create_publisher<actuator_msgs::msg::Actuators>(gazebo_topic, rclcpp::QoS(10));
 
@@ -351,6 +349,8 @@ void Node::ctrl_loop()
     if (_gazebo_motor_pub) {
       actuator_msgs::msg::Actuators gz_msg;
       gz_msg.velocity = {0.0, 0.0, 0.0, 0.0};
+      // Timestamp when motor command is sent
+      gz_msg.header.stamp = get_clock()->now();
       _gazebo_motor_pub->publish(gz_msg);
     }
     return;
@@ -415,6 +415,8 @@ void Node::ctrl_loop()
       static_cast<float>((motor_commands[3] * MOTOR_SCALE + LOWER_STALL_LIMIT) * SIM_SLOWDOWN_SCALE),
     };
 
+    // Timestamp when motor command is sent
+    gz_msg.header.stamp = get_clock()->now();
     _gazebo_motor_pub->publish(gz_msg);
   }
 
