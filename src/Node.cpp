@@ -505,16 +505,18 @@ void Node::load_parameters()
 
 void Node::update_attitude_target(const Quaternion& attitude_current)
 {
-  // Yaw handling: do NOT integrate heading from stick — leave yaw target
-  // equal to current heading so PID holds heading. Only apply feedforward
-  // yaw rate from the stick and let the PID handle error correction.
-    _yaw_target = attitude_current.getYaw();
-
   // Feedforward yaw: positive stick = clockwise in FLU => invert sign
   float controlYaw = static_cast<float>(_target_angular_velocity.z);
+  // Ignore yaw deadzone
   if (std::abs(controlYaw) < 0.1f) controlYaw = 0.0f;
+  // If drone not armed, yaw control non-zero (user push on yaw stick) or uninitialised, then set heading to current yaw
+  if (!_armed || controlYaw != 0.0f || std::isnan(_yaw_target)) {
+    _yaw_target = attitude_current.getYaw();
+  }
+  // Feedforward yaw rate. Yaw is effectively a proportional controller
   _rates_extra = Vector(0.0f, 0.0f, -controlYaw * static_cast<float>(YAWRATE_MAX));
-  // Compute roll/pitch targets from normalized stick inputs
+
+  // Compute roll/pitch targets from normalised stick inputs
   float max_tilt = static_cast<float>(get_parameter("max_tilt_angle").as_double());
   float pitch_target = 0.0f;
   float roll_target = 0.0f;
