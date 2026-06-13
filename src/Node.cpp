@@ -226,33 +226,9 @@ void Node::init_teleop_sub()
       _target_angular_velocity.y = static_cast<double>(msg->angular.y);
       _target_angular_velocity.z = static_cast<double>(msg->angular.z);
 
-      // === Convert velocity commands to attitude and thrust targets ===
-      
-      // Get max tilt angle from parameters
-      // float max_tilt = static_cast<float>(get_parameter("max_tilt_angle").as_double());
-
-      // Compute desired attitude from linear velocities
-      // linear.x → pitch (forward/backward)
-      // linear.y → roll (lateral)
-      // These two are scaled to not exceed max_tilt_angle
-      // float pitch_target = 0.0f;
-      // float roll_target = 0.0f;
-
-      // Simple velocity to angle mapping (can be tuned)
-      // Assuming teleop max velocities are around ±1 m/s
-      // if (std::abs(msg->linear.x) > 1e-3 || std::abs(msg->linear.y) > 1e-3) {
-      //   float vz_max = 1.0f;  // Expected max velocity in m/s
-      //   pitch_target = std::clamp(static_cast<float>(msg->linear.x) / vz_max, -1.0f, 1.0f) * max_tilt;
-      //   roll_target = -std::clamp(static_cast<float>(msg->linear.y) / vz_max, -1.0f, 1.0f) * max_tilt;
-      // }
-
-      // Missing this implementation for resetting yaw. Not really needed
-      //   if (!armed || yaw_target != 0) yawTarget = attitude.getYaw();
-
       // Note: _attitude_target is computed in ctrl_loop() via update_attitude_target()
 
       // Map thrust: linear.z velocity (up/down) to throttle [0, 1]
-      // Assuming 0 m/s = hover (0.5), positive = up, negative = down
       _thrust_target = std::clamp(0.5f + static_cast<float>(msg->linear.z) * 0.5f, 0.0f, 1.0f);
     },
     _teleop_sub_options);
@@ -374,8 +350,6 @@ void Node::ctrl_loop()
   // Output: target angular rates
   Vector rate_target = _attitude_controller.update(attitude_current,
         _attitude_target, _rates_extra);
-  // Vector rate_target = _attitude_controller.update(attitude_current, 
-  //       _attitude_target, Vector(0, 0, -_target_angular_velocity.z * YAWRATE_MAX));
 
   // Level 2: Rate Controller
   // Inputs: target rates, current rates
@@ -513,6 +487,10 @@ void Node::update_attitude_target(const Quaternion& attitude_current)
   if (!_armed || controlYaw != 0.0f || std::isnan(_yaw_target)) {
     _yaw_target = attitude_current.getYaw();
   }
+
+  // Log yaw target
+  // RCLCPP_INFO(get_logger(), "Yaw Target: %.3f",_yaw_target * 180 / PI );
+
   // Feedforward yaw rate. Yaw is effectively a proportional controller
   _rates_extra = Vector(0.0f, 0.0f, -controlYaw * static_cast<float>(YAWRATE_MAX));
 
