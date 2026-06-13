@@ -136,7 +136,7 @@
     <include>
       <!-- model:// is IGN_GAZEBO_RESOURCE_PATH, added in env-hooks-->
       <uri>model://models/viper</uri>
-      <pose>0 0 0.5 0 0 0</pose> <!-- Initial position: 0.5m above ground -->
+      <pose>0 0 1 0 0 0</pose> <!-- Initial position: 1m above ground -->
     </include>
 
 
