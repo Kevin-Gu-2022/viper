@@ -64,7 +64,7 @@ public:
         // quaternion between to get the relative yaw error and add
         // feed-forward `rates_extra.z` (e.g. commanded yaw rate).
         Quaternion q_err = Quaternion::between(attitude_target, attitude_current);
-        float yaw_error = q_err.getYaw();
+        float yaw_error = wrapAngle(q_err.getYaw());
         float yaw_rate_target = yaw_pid_.update(yaw_error) + rates_extra.z;
 
         return Vector(roll_rate_target, pitch_rate_target, yaw_rate_target);
@@ -143,8 +143,8 @@ public:
      * @param windup       Integral windup limit (default: 0.3)
      */
     RateController(float roll_p = 0.05f, float roll_i = 0.2f, float roll_d = 0.001f,
-                   float pitch_p = 0.05f, float pitch_i = 0.2f, float pitch_d = 0.001f,
-                   float yaw_p = 0.3f, float yaw_i = 0.0f, float yaw_d = 0.0f,
+                   float pitch_p = 0.15f, float pitch_i = 0.2f, float pitch_d = 0.002f,
+                   float yaw_p = 0.3f, float yaw_i = 0.05f, float yaw_d = 0.00015f,
                    float windup = 0.3f, float d_lpf_alpha = 0.2f)
         : roll_pid_(roll_p, roll_i, roll_d, windup, d_lpf_alpha),
           pitch_pid_(pitch_p, pitch_i, pitch_d, windup, d_lpf_alpha),
