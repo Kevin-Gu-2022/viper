@@ -401,7 +401,7 @@
         <!-- Add anchor points for PID tuning here -->
 
         <!-- Ball joint allows rotation about all 3 axes -->
-        <!-- <joint name="quad_ball_joint" type="ball">
+        <joint name="quad_ball_joint" type="ball">
         <parent>world</parent>
         <child>X3/base_link</child>
             <axis>
@@ -410,36 +410,29 @@
                 <friction>0.0</friction>
                 </dynamics>
             </axis>
-        </joint> -->
+        </joint>
+
+    <!-- Move these two tags below for single axis tuning -->
+    </model>
+</sdf>
 
 
         <!-- Roll joint to fix around an axis -->
-        <joint name="roll_joint" type="revolute">
+        <!-- <joint name="roll_joint" type="revolute">
             <parent>world</parent>
             <child>X3/base_link</child>
 
             <axis>
-                <xyz>0 1 0</xyz> <!-- X-axis (roll) -->
-
-                <limit>
-                    <!-- Can rotate 180 degrees either way -->
-                    <lower>-3.14159</lower>
-                    <upper>3.14159</upper>
-                    <!-- Clamp max torque -->
-                    <effort>1000</effort>
-                    <!-- Clamp the velocity of turns -->
-                    <velocity>100</velocity> 
-                </limit>
+                <xyz>0 0 1</xyz> <!-- X-axis (roll) -->
 
                 <dynamics>
                     <damping>0.0</damping>
                     <friction>0.0</friction>
                 </dynamics>
             </axis>
-        </joint>
+        </joint> -->
 
 
 
 
-    </model>
-</sdf>
+
