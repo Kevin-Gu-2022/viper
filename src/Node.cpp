@@ -351,6 +351,18 @@ void Node::ctrl_loop()
   Vector rate_target = _attitude_controller.update(attitude_current,
         _attitude_target, _rates_extra);
 
+  // PS3 controller is FLU so no need for further negations in z
+
+  // Bypass outer attitude loop: use commanded angular rates directly (rad/s)
+  // !TODO: Add acro mode parameter
+  // if (acro_mode) {
+    // Vector rate_target = Vector(
+    //     -static_cast<float>(_target_linear_velocity.y * radians(180)),
+    //     static_cast<float>(_target_linear_velocity.x * radians(180)) ,
+    //     static_cast<float>(_target_angular_velocity.z  * static_cast<float>(YAWRATE_MAX))
+    // );
+  // }
+
   // Level 2: Rate Controller
   // Inputs: target rates, current rates
   // Output: target torques
@@ -412,28 +424,52 @@ void Node::ctrl_loop()
 void Node::declare_control_parameters()
 {
   // Attitude controller parameters
-  declare_parameter("attitude_roll_p", 6.0);
-  declare_parameter("attitude_pitch_p", 6.0);
-  declare_parameter("attitude_yaw_p", 3.0);
+  // declare_parameter("attitude_roll_p", 0.2);
+  // declare_parameter("attitude_roll_i", 0.3);
+  // declare_parameter("attitude_roll_d", 0.05);
+  // declare_parameter("attitude_pitch_p", 0.2);
+  // declare_parameter("attitude_pitch_i", 0.3);
+  // declare_parameter("attitude_pitch_d", 0.05);
+  // declare_parameter("attitude_yaw_p", 0.3);
+  // declare_parameter("attitude_yaw_i", 0.0);
+  // declare_parameter("attitude_yaw_d", 0.0);
+  // declare_parameter("attitude_roll_damping", 0.9);
+  // declare_parameter("attitude_pitch_damping", 0.9);
 
-  // Rate controller parameters (with default flix values)
+  // Attitude values
+  declare_parameter("attitude_roll_p", 6.0);
+  declare_parameter("attitude_roll_i", 0.01);
+  declare_parameter("attitude_roll_d", 0.001);
+
+  declare_parameter("attitude_pitch_p", 6.0);
+  declare_parameter("attitude_pitch_i", 0.0);
+  declare_parameter("attitude_pitch_d", 0.0);
+
+  declare_parameter("attitude_yaw_p", 0.0);
+  declare_parameter("attitude_yaw_i", 0.0);
+  declare_parameter("attitude_yaw_d", 0.0);
+
+  declare_parameter("attitude_roll_damping", 0.9);
+  declare_parameter("attitude_pitch_damping", 0.9);
+
+  //Rate values
   declare_parameter("rate_roll_p", 0.05);
   declare_parameter("rate_roll_i", 0.2);
   declare_parameter("rate_roll_d", 0.001);
 
-  declare_parameter("rate_pitch_p", 0.05);
-  declare_parameter("rate_pitch_i", 0.2);
-  declare_parameter("rate_pitch_d", 0.001);
+  declare_parameter("rate_pitch_p", 0.35);
+  declare_parameter("rate_pitch_i", 0.4);
+  declare_parameter("rate_pitch_d", 0.005);
 
-  declare_parameter("rate_yaw_p", 0.3);
-  declare_parameter("rate_yaw_i", 0.0);
-  declare_parameter("rate_yaw_d", 0.0);
+  declare_parameter("rate_yaw_p", 0.5);
+  declare_parameter("rate_yaw_i", 0.05);
+  declare_parameter("rate_yaw_d", 0.001);
 
   declare_parameter("rate_integral_windup", 0.3);
   declare_parameter("rate_derivative_filter_alpha", 0.2);
 
   // Velocity to attitude mapping
-  declare_parameter("max_tilt_angle", 0.2618);  // 30 degrees in radians
+  declare_parameter("max_tilt_angle", radians(15));
 
   // Load initial parameter values
   load_parameters();
@@ -446,8 +482,16 @@ void Node::load_parameters()
   // Update attitude controller gains
   _attitude_controller.set_gains(
     static_cast<float>(get_parameter("attitude_roll_p").as_double()),
+    static_cast<float>(get_parameter("attitude_roll_i").as_double()),
+    static_cast<float>(get_parameter("attitude_roll_d").as_double()),
     static_cast<float>(get_parameter("attitude_pitch_p").as_double()),
-    static_cast<float>(get_parameter("attitude_yaw_p").as_double())
+    static_cast<float>(get_parameter("attitude_pitch_i").as_double()),
+    static_cast<float>(get_parameter("attitude_pitch_d").as_double()),
+    static_cast<float>(get_parameter("attitude_yaw_p").as_double()),
+    static_cast<float>(get_parameter("attitude_yaw_i").as_double()),
+    static_cast<float>(get_parameter("attitude_yaw_d").as_double()),
+    static_cast<float>(get_parameter("attitude_roll_damping").as_double()),
+    static_cast<float>(get_parameter("attitude_pitch_damping").as_double())
   );
 
   // Update rate controller gains
@@ -487,12 +531,12 @@ void Node::update_attitude_target(const Quaternion& attitude_current)
   if (!_armed || controlYaw != 0.0f || std::isnan(_yaw_target)) {
     _yaw_target = attitude_current.getYaw();
   }
-
+  
   // Log yaw target
-  // RCLCPP_INFO(get_logger(), "Yaw Target: %.3f",_yaw_target * 180 / PI );
+  // RCLCPP_INFO(get_logger(), "Yaw Target: %.3f | controlYaw: %.3f",_yaw_target * 180 / PI, controlYaw);
 
-  // Feedforward yaw rate. Yaw is effectively a proportional controller
-  _rates_extra = Vector(0.0f, 0.0f, -controlYaw * static_cast<float>(YAWRATE_MAX));
+  // Feedforward yaw rate
+  _rates_extra = Vector(0.0f, 0.0f, controlYaw * static_cast<float>(YAWRATE_MAX));
 
   // Compute roll/pitch targets from normalised stick inputs
   float max_tilt = static_cast<float>(get_parameter("max_tilt_angle").as_double());
@@ -520,8 +564,16 @@ void Node::on_parameter_event(rcl_interfaces::msg::ParameterEvent::SharedPtr eve
   {
     return param.name == "enable_button" ||
            param.name == "attitude_roll_p" ||
+           param.name == "attitude_roll_i" ||
+           param.name == "attitude_roll_d" ||
            param.name == "attitude_pitch_p" ||
+           param.name == "attitude_pitch_i" ||
+           param.name == "attitude_pitch_d" ||
            param.name == "attitude_yaw_p" ||
+           param.name == "attitude_yaw_i" ||
+           param.name == "attitude_yaw_d" ||
+           param.name == "attitude_roll_damping" ||
+           param.name == "attitude_pitch_damping" ||
            param.name == "rate_roll_p" ||
            param.name == "rate_roll_i" ||
            param.name == "rate_roll_d" ||

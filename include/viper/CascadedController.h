@@ -3,6 +3,7 @@
  */
 #pragma once
 
+#include <algorithm>
 #include "PID.h"
 #include "vector.h"
 #include "quaternion.h"
@@ -36,10 +37,15 @@ public:
      * @param pitch_p   Pitch proportional gain (default: 6.0)
      * @param yaw_p     Yaw proportional gain (default: 3.0)
      */
-    AttitudeController(float roll_p = 6.0f, float pitch_p = 6.0f, float yaw_p = 3.0f)
-        : roll_pid_(roll_p, 0.0f, 0.0f),
-          pitch_pid_(pitch_p, 0.0f, 0.0f),
-          yaw_pid_(yaw_p, 0.0f, 0.0f) {}
+    AttitudeController(float roll_p = 0.2f, float roll_i = 0.3f, float roll_d = 0.05f,
+                       float pitch_p = 0.2f, float pitch_i = 0.3f, float pitch_d = 0.05f,
+                       float yaw_p = 3.0f, float yaw_i = 0.0f, float yaw_d = 0.0f,
+                       float roll_damping = 1.0f, float pitch_damping = 1.0f)
+        : roll_pid_(roll_p, roll_i, roll_d),
+          pitch_pid_(pitch_p, pitch_i, pitch_d),
+          yaw_pid_(yaw_p, yaw_i, yaw_d),
+          roll_damping_(std::clamp(roll_damping, 0.0f, 1.0f)),
+          pitch_damping_(std::clamp(pitch_damping, 0.0f, 1.0f)) {}
 
     /**
      * @brief Update attitude controller and compute target rates
@@ -79,6 +85,26 @@ public:
         yaw_pid_.p = yaw_p;
     }
 
+    void set_gains(float roll_p, float roll_i, float roll_d,
+                   float pitch_p, float pitch_i, float pitch_d,
+                   float yaw_p, float yaw_i, float yaw_d,
+                   float roll_damping = 1.0f, float pitch_damping = 1.0f) {
+        roll_pid_.p = roll_p;
+        roll_pid_.i = roll_i;
+        roll_pid_.d = roll_d;
+
+        pitch_pid_.p = pitch_p;
+        pitch_pid_.i = pitch_i;
+        pitch_pid_.d = pitch_d;
+
+        yaw_pid_.p = yaw_p;
+        yaw_pid_.i = yaw_i;
+        yaw_pid_.d = yaw_d;
+
+        roll_damping_ = std::clamp(roll_damping, 0.0f, 1.0f);
+        pitch_damping_ = std::clamp(pitch_damping, 0.0f, 1.0f);
+    }
+
     /**
      * @brief Get roll PID controller for parameter adjustment
      */
@@ -107,6 +133,8 @@ private:
     PID roll_pid_;   ///< PID controller for roll angle
     PID pitch_pid_;  ///< PID controller for pitch angle
     PID yaw_pid_;    ///< PID controller for yaw angle
+    float roll_damping_ = 1.0f;  ///< Outer attitude damping for roll angle control
+    float pitch_damping_ = 1.0f; ///< Outer attitude damping for pitch angle control
 };
 
 
@@ -131,19 +159,19 @@ public:
      * 
      * Rate controllers typically use higher gains to respond quickly to disturbances.
      * 
-     * @param roll_p       Roll rate proportional gain (default: 0.05)
+     * @param roll_p       Roll rate proportional gain (default: 0.15)
      * @param roll_i       Roll rate integral gain (default: 0.2)
-     * @param roll_d       Roll rate derivative gain (default: 0.001)
-     * @param pitch_p      Pitch rate proportional gain (default: 0.05)
+     * @param roll_d       Roll rate derivative gain (default: 0.0002)
+     * @param pitch_p      Pitch rate proportional gain (default: 0.15)
      * @param pitch_i      Pitch rate integral gain (default: 0.2)
-     * @param pitch_d      Pitch rate derivative gain (default: 0.001)
+     * @param pitch_d      Pitch rate derivative gain (default: 0.0002)
      * @param yaw_p        Yaw rate proportional gain (default: 0.3)
-     * @param yaw_i        Yaw rate integral gain (default: 0.0)
-     * @param yaw_d        Yaw rate derivative gain (default: 0.0)
+     * @param yaw_i        Yaw rate integral gain (default: 0.05)
+     * @param yaw_d        Yaw rate derivative gain (default: 0.00015)
      * @param windup       Integral windup limit (default: 0.3)
      */
-    RateController(float roll_p = 0.05f, float roll_i = 0.2f, float roll_d = 0.001f,
-                   float pitch_p = 0.15f, float pitch_i = 0.2f, float pitch_d = 0.002f,
+    RateController(float roll_p = 0.15f, float roll_i = 0.2f, float roll_d = 0.0002f,
+                   float pitch_p = 0.15f, float pitch_i = 0.2f, float pitch_d = 0.0002f,
                    float yaw_p = 0.3f, float yaw_i = 0.05f, float yaw_d = 0.00015f,
                    float windup = 0.3f, float d_lpf_alpha = 0.2f)
         : roll_pid_(roll_p, roll_i, roll_d, windup, d_lpf_alpha),

@@ -68,10 +68,10 @@ public:
         // motors[1] = thrust - torques.x - torques.y - torques.z;  // RR
 
         // Roll: Left (+) Right (-) | Pitch: Front (+) Rear (-) | Yaw: CW (+) CCW (-)
-        motors[3] = thrust + torques.x - torques.y - torques.z;  // FL (Left, Front, CW)
-        motors[2] = thrust - torques.x - torques.y + torques.z;  // FR (Right, Front, CCW)
-        motors[0] = thrust + torques.x + torques.y + torques.z;  // RL (Left, Rear, CCW)
-        motors[1] = thrust - torques.x + torques.y - torques.z;  // RR (Right, Rear, CW)
+        motors[3] = thrust + torques.x - torques.y + torques.z;  // FL (Left, Front, CW)
+        motors[2] = thrust - torques.x - torques.y - torques.z;  // FR (Right, Front, CCW)
+        motors[0] = thrust + torques.x + torques.y - torques.z;  // RL (Left, Rear, CCW)
+        motors[1] = thrust - torques.x + torques.y + torques.z;  // RR (Right, Rear, CW)
 
         // Clamp motors to valid range [0.0, 1.0]
         for (auto& motor : motors) {
