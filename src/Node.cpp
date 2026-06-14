@@ -46,6 +46,7 @@ Node::Node()
 , _attitude_target(1.0f, 0.0f, 0.0f, 0.0f)  // Initialize to level attitude (identity quaternion)
 , _yaw_target(NAN)
 , _thrust_target(0.0f)
+, _acro_mode(false)
 {
   init_cyphal_heartbeat();
 
@@ -345,23 +346,18 @@ void Node::ctrl_loop()
 
   // === Cascaded PID Control Loop ===
 
-  // Level 1: Attitude Controller
-  // Inputs: current attitude, target attitude, feedforward rates
-  // Output: target angular rates
-  Vector rate_target = _attitude_controller.update(attitude_current,
-        _attitude_target, _rates_extra);
-
-  // PS3 controller is FLU so no need for further negations in z
-
-  // Bypass outer attitude loop: use commanded angular rates directly (rad/s)
-  // !TODO: Add acro mode parameter
-  // if (acro_mode) {
-    // Vector rate_target = Vector(
-    //     -static_cast<float>(_target_linear_velocity.y * radians(180)),
-    //     static_cast<float>(_target_linear_velocity.x * radians(180)) ,
-    //     static_cast<float>(_target_angular_velocity.z  * static_cast<float>(YAWRATE_MAX))
-    // );
-  // }
+  // Level 1: Attitude Controller or acro rate control
+  Vector rate_target;
+  if (_acro_mode) {
+    rate_target = Vector(
+        -static_cast<float>(_target_linear_velocity.y * radians(180)),
+        static_cast<float>(_target_linear_velocity.x * radians(180)),
+        -static_cast<float>(_target_angular_velocity.z * static_cast<float>(YAWRATE_MAX))
+    );
+  } else {
+    rate_target = _attitude_controller.update(attitude_current,
+          _attitude_target, _rates_extra);
+  }
 
   // Level 2: Rate Controller
   // Inputs: target rates, current rates
@@ -451,6 +447,7 @@ void Node::declare_control_parameters()
 
   declare_parameter("attitude_roll_damping", 0.9);
   declare_parameter("attitude_pitch_damping", 0.9);
+  declare_parameter("acro_mode", false);
 
   //Rate values
   declare_parameter("rate_roll_p", 0.05);
@@ -517,6 +514,7 @@ void Node::load_parameters()
   _rate_controller.get_yaw_pid().windup_limit = 
     static_cast<float>(get_parameter("rate_integral_windup").as_double());
 
+  _acro_mode = get_parameter("acro_mode").as_bool();
 
     // !TODO: Add parameter changes to alpha value. It's currently skipped now
 }
@@ -574,6 +572,7 @@ void Node::on_parameter_event(rcl_interfaces::msg::ParameterEvent::SharedPtr eve
            param.name == "attitude_yaw_d" ||
            param.name == "attitude_roll_damping" ||
            param.name == "attitude_pitch_damping" ||
+           param.name == "acro_mode" ||
            param.name == "rate_roll_p" ||
            param.name == "rate_roll_i" ||
            param.name == "rate_roll_d" ||

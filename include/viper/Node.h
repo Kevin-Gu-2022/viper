@@ -120,6 +120,7 @@ private:
   float _yaw_target;            // Integrated heading reference for yaw
   float _thrust_target = 0.0f;  // Target collective thrust [0, 1]
   Vector _rates_extra;          // Feedforward rates (used for yaw feedforward)
+  bool _acro_mode = false;      // When true, bypass attitude control and use direct rate commands
   
   // Declare parameters for tuning
   void declare_control_parameters();
