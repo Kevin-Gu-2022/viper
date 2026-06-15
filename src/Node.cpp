@@ -337,6 +337,12 @@ void Node::ctrl_loop()
   // and constantly running while new IMU data coming in 
   auto const & est = _estimator->estimate();
   if (!est.valid) return;
+
+  // BNO085 ROS driver needs to be ported first before we can do anything with this
+  // See how bad the measurement ages are before implementing first order forward projection
+  // If measurement age really large, risks overcorrection, essentially adding energy into system
+  auto const measurement_age = _estimator->measurement_age();
+  (void) measurement_age;
   
   Quaternion attitude_current = est.orientation;
   Vector     rate_current     = est.angular_rate;
@@ -349,6 +355,7 @@ void Node::ctrl_loop()
   // Level 1: Attitude Controller or acro rate control
   Vector rate_target;
   if (_acro_mode) {
+    // radians(180) is max rate
     rate_target = Vector(
         -static_cast<float>(_target_linear_velocity.y * radians(180)),
         static_cast<float>(_target_linear_velocity.x * radians(180)),
@@ -403,7 +410,7 @@ void Node::ctrl_loop()
   }
 
   // Log controller state
-  if (false) {  // Set to true for verbose logging
+  if (false) {  // Manually set to true for verbose logging
     Vector attitude_euler = attitude_current.toEuler();
     RCLCPP_INFO(get_logger(),
       "Attitude (deg): roll=%.1f pitch=%.1f yaw=%.1f | "
@@ -419,19 +426,6 @@ void Node::ctrl_loop()
 
 void Node::declare_control_parameters()
 {
-  // Attitude controller parameters
-  // declare_parameter("attitude_roll_p", 0.2);
-  // declare_parameter("attitude_roll_i", 0.3);
-  // declare_parameter("attitude_roll_d", 0.05);
-  // declare_parameter("attitude_pitch_p", 0.2);
-  // declare_parameter("attitude_pitch_i", 0.3);
-  // declare_parameter("attitude_pitch_d", 0.05);
-  // declare_parameter("attitude_yaw_p", 0.3);
-  // declare_parameter("attitude_yaw_i", 0.0);
-  // declare_parameter("attitude_yaw_d", 0.0);
-  // declare_parameter("attitude_roll_damping", 0.9);
-  // declare_parameter("attitude_pitch_damping", 0.9);
-
   // Attitude values
   declare_parameter("attitude_roll_p", 6.0);
   declare_parameter("attitude_roll_i", 0.01);

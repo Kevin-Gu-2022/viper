@@ -64,6 +64,7 @@ public:
     }
 
     _prev_stamp = stamp;
+    _last_sample_arrival = std::chrono::steady_clock::now();
     _sample_count++;
 
     _estimate = on_update(msg, dt);
@@ -75,9 +76,18 @@ public:
   // Return the estimate variable when call estimate() function
   AttitudeEstimate const & estimate() const { return _estimate; }
 
+  /** Return the age of the latest IMU sample relative to now. This is the
+   * time since the most recently processed IMU message arrived. */
+  std::optional<std::chrono::duration<float>> measurement_age() const
+  {
+    if (!_last_sample_arrival.has_value()) return std::nullopt;
+    return std::chrono::duration<float>(std::chrono::steady_clock::now() - _last_sample_arrival.value());
+  }
+
   void reset()
   {
     _prev_stamp.reset();
+    _last_sample_arrival.reset();
     _sample_count = 0;
     _estimate = AttitudeEstimate{};
     on_reset();
@@ -98,6 +108,7 @@ private:
   char const * _name;
   AttitudeEstimate _estimate{};
   std::optional<std::chrono::nanoseconds> _prev_stamp{};
+  std::optional<std::chrono::steady_clock::time_point> _last_sample_arrival{};
   size_t _sample_count{0};
 };
 }
