@@ -377,9 +377,7 @@ void Node::ctrl_loop()
   auto motor_commands = _motor_mixer.mix(_thrust_target, torque_target);
 
   // Scale motor commands to appropriate range
-  const float MOTOR_SCALE = 100.0f;
-  // Gazebo sim slows velocity down by factor of 10, increasing numerical stability (i.e. removes need to deal with really small numbers)
-  const float SIM_SLOWDOWN_SCALE = 10.0f;
+  const float MOTOR_SCALE = 1000.0f;
   // We must offset the commands by at least 10 rad/s otherwise ESC will think they're stalled
   const float LOWER_STALL_LIMIT = 10.0f;
   
@@ -398,10 +396,10 @@ void Node::ctrl_loop()
     actuator_msgs::msg::Actuators gz_msg;
 
     gz_msg.velocity = {
-      static_cast<float>((motor_commands[0] * MOTOR_SCALE + LOWER_STALL_LIMIT) * SIM_SLOWDOWN_SCALE),
-      static_cast<float>((motor_commands[1] * MOTOR_SCALE + LOWER_STALL_LIMIT) * SIM_SLOWDOWN_SCALE),
-      static_cast<float>((motor_commands[2] * MOTOR_SCALE + LOWER_STALL_LIMIT) * SIM_SLOWDOWN_SCALE),
-      static_cast<float>((motor_commands[3] * MOTOR_SCALE + LOWER_STALL_LIMIT) * SIM_SLOWDOWN_SCALE),
+      static_cast<float>((motor_commands[0] * MOTOR_SCALE + LOWER_STALL_LIMIT)),
+      static_cast<float>((motor_commands[1] * MOTOR_SCALE + LOWER_STALL_LIMIT)),
+      static_cast<float>((motor_commands[2] * MOTOR_SCALE + LOWER_STALL_LIMIT)),
+      static_cast<float>((motor_commands[3] * MOTOR_SCALE + LOWER_STALL_LIMIT)),
     };
 
     // Timestamp when motor command is sent

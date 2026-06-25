@@ -45,13 +45,13 @@ protected:
       rates_filter.output = gyro;
       _initialised = true;
     }
-
-    // Filter gyro to get angular rates (gets fed to the D term in PID hence need for filtering)
-    _rates = rates_filter.update(gyro);
-
-    // Apply rates to attitude
+    
+    // Raw gyro for dead-reckoning
     if (dt > 0.0f)
-      _attitude = Quaternion::rotate(_attitude, Quaternion::fromRotationVector(_rates * dt));
+    _attitude = Quaternion::rotate(_attitude, Quaternion::fromRotationVector(gyro * dt));
+    
+    // Filtered rates: D-term consumption only
+    _rates = rates_filter.update(gyro);
 
     // Accelerometer gravity correction
     apply_acc(acc);

@@ -12,7 +12,7 @@ namespace viper {
     class LowPassFilter {
     public:
         float alpha; // smoothing constant, 1 means filter disabled
-        T output;
+        T output{};
 
         LowPassFilter(float alpha): alpha(alpha) {};
 
