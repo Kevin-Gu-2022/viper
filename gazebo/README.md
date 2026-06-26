@@ -14,6 +14,7 @@ Then in another terminal, run the following to make drone fly:
 ```bash
 ign topic -t /X3/gazebo/command/motor_speed --msgtype ignition.msgs.Actuators -p 'velocity:[700, 700, 700, 700]'
 ```
+Flight controller has a safety check for enable button, so above command will not work directly when flight controller running. Without the enable button held down, the flight controller sends a [0, 0, 0, 0] motor speed command immediately. If want to try out, launch this world by itself without flight controller code running. Will lose joystick support though. 
 
 Reset pose:
 ```bash
@@ -25,13 +26,13 @@ ign service -s /world/quadcopter_teleop/set_pose \
 ```
 
 ## PID Tuning
-Within the `model.sdf` file, at the very bottom, we can change the anchor type to lock the quadopter along certain axis or in certain positions in space, allowing for easier PID tuning.
+Within the `model.sdf` file, at the very bottom, we can change the joint type to lock the quadopter along certain axis or in certain positions in space, allowing for easier PID tuning. Use the ball joint for rotation about all three axes, and the roll joint for tuning along a certain axis.
 
 ## Directory Structure
 ```bash
 gazebo
 ├── config
-│   └── bridge.yaml
+│   └── bridge.yaml  # Config options for ros_gz_bridge
 ├── env-hooks
 │   └── viper.dsv.in  # Defines the IGN_GAZEBO_RESOURCE_PATH
 ├── models
@@ -44,5 +45,7 @@ gazebo
 ```
 
 `IGN_GAZEBO_RESOURCE_PATH` curently points to `gazebo` directory. This allows launching of Gazebo simulation independently by just calling `ign gazbeo worlds/world.sdf` from `gazebo` directory.
+
+See original quadcopter example [here](https://github.com/gazebosim/gz-sim/blob/main/examples/worlds/quadcopter.sdf).
 
 
