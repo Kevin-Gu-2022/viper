@@ -131,7 +131,7 @@ if [ "$BUILD_MODE" = "arm" ]; then
 else
     echo "=== Running Native x86_64 Build (Local Machine) ==="
     
-    # Pre-emptively fix local permissions if an old root-run left artifacts behind
+    # Preemptively fix local permissions if an old root-run left artifacts behind
     if [ -d "build" ] || [ -d "install" ] || [ -d "log" ]; then
         if [ ! -w "build" ] 2>/dev/null || [ ! -w "install" ] 2>/dev/null; then
             echo "Detected root-owned artifacts. Resetting workspace permissions..."

@@ -14,7 +14,7 @@ Generic ROS based drone flight stack for the [Pika Spark](https://pika-spark.io/
 Note: Don't forget to install the [dependencies](https://github.com/107-systems/viper#install-dependencies) (see at the end of this file).  
 Removed these dependencies for now...
 
-- See the detailed [build instuctions](docs/build.md).
+- See the detailed [build instructions](docs/build.md).
 
 
 # Running It

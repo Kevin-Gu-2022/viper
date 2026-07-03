@@ -1,7 +1,7 @@
 # Build Instructions
 There may be better and faster build options with using docker's buildx. Checkout this [guide](https://www.docker.com/blog/faster-multi-platform-builds-dockerfile-cross-compilation-guide/)
 ## Option 1 - Build in Docker Container with QEMU emulation
-This method requires QEMU to emulate the arm64 arcitecture. Install using this command:
+This method requires QEMU to emulate the arm64 architecture. Install using this command:
 ```bash
 docker run --privileged --rm tonistiigi/binfmt --install all
 ```
@@ -82,7 +82,7 @@ To save pasting that long command in step 3 just to build, run the [`build.sh`](
 ```
 - `--arm`: Switches the compilation pipeline from native x86_64 to target  AARCH64 emulation. This spins up the local 'ros-humble-aarch64' Docker container, binds the current working directory to internal mount paths, and triggers the colcon build isolated from host binary definitions.
 
-- `--clean`: Forces a hard reset of compilation cache before starting. Add flag if previous build was for a different architecture so that build artefacts not mixed. Deletes the following directory nodes: 
+- `--clean`: Forces a hard reset of compilation cache before starting. Add flag if previous build was for a different architecture so that build artifacts not mixed. Deletes the following directory nodes: 
   - `build/`
   - `install/`
   - `log/`

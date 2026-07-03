@@ -44,7 +44,7 @@ gazebo
     └── world.sdf
 ```
 
-`IGN_GAZEBO_RESOURCE_PATH` curently points to `gazebo` directory. This allows launching of Gazebo simulation independently by just calling `ign gazbeo worlds/world.sdf` from `gazebo` directory.
+`IGN_GAZEBO_RESOURCE_PATH` currently points to `gazebo` directory. This allows launching of Gazebo simulation independently by just calling `ign gazebo worlds/world.sdf` from `gazebo` directory.
 
 See original quadcopter example [here](https://github.com/gazebosim/gz-sim/blob/main/examples/worlds/quadcopter.sdf).
 

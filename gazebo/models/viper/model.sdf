@@ -315,7 +315,7 @@
             </axis>
         </joint>
 
-        <!-- Motors - initialise the motors with parameters -->
+                <!-- Motors - initialize the motors with parameters -->
         <plugin
           filename="ignition-gazebo-multicopter-motor-model-system"
           name="gz::sim::systems::MulticopterMotorModel">

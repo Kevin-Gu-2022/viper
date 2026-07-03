@@ -42,7 +42,7 @@ def generate_launch_description():
             emulate_tty=True,
             parameters=[{'device': '/dev/input/js0'}]
         ),
-        # Teleop node converts the sensor_msg messages from joy node into geometry_msg Twist meessages
+        # Teleop node converts the sensor_msg messages from joy node into geometry_msg Twist messages
         Node(
             package='teleop_twist_joy',
             executable='teleop_node',

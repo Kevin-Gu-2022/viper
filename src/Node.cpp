@@ -76,7 +76,7 @@ Node::Node()
                                          _node_hdl.spinSome();
                                        });
 
-  // Initialise the state estimator object (estimator can be interchanged here)
+  // Initialize the state estimator object (estimator can be interchanged here)
   _estimator = std::make_unique<ExternalEstimator>();
 
   declare_parameter("enable_button", 0);
@@ -156,7 +156,7 @@ void Node::init_teleop_sub()
   declare_parameter("teleop_topic_deadline_ms", 100);
   declare_parameter("teleop_topic_liveliness_lease_duration", 1000);
 
-  // Use parameters declared in viper-quad.py to confgure subscriptions
+  // Use parameters declared in viper-quad.py to configure subscriptions
   auto const teleop_topic = get_parameter("teleop_topic").as_string();
   auto const teleop_topic_deadline = std::chrono::milliseconds(get_parameter("teleop_topic_deadline_ms").as_int());
   auto const teleop_topic_liveliness_lease_duration = std::chrono::milliseconds(get_parameter("teleop_topic_liveliness_lease_duration").as_int());
@@ -372,7 +372,7 @@ void Node::ctrl_loop()
 
   // Motor Mixer
   // Inputs: thrust, torques
-  // Output: 4 normalised motor commands, i.e. [0, 1]
+  // Output: 4 normalized motor commands, i.e. [0, 1]
   auto motor_commands = _motor_mixer.mix(_thrust_target, torque_target);
 
   // Scale motor commands to appropriate range
@@ -517,7 +517,7 @@ void Node::update_attitude_target(const Quaternion& attitude_current)
   float controlYaw = static_cast<float>(_target_angular_velocity.z);
   // Ignore yaw deadzone
   if (std::abs(controlYaw) < 0.1f) controlYaw = 0.0f;
-  // If drone not armed, yaw control non-zero (user push on yaw stick) or uninitialised, then set heading to current yaw
+  // If drone not armed, yaw control non-zero (user push on yaw stick) or uninitialized, then set heading to current yaw
   if (!_armed || controlYaw != 0.0f || std::isnan(_yaw_target)) {
     _yaw_target = attitude_current.getYaw();
   }
@@ -528,7 +528,7 @@ void Node::update_attitude_target(const Quaternion& attitude_current)
   // Feedforward yaw rate
   _rates_extra = Vector(0.0f, 0.0f, controlYaw * static_cast<float>(YAWRATE_MAX));
 
-  // Compute roll/pitch targets from normalised stick inputs
+  // Compute roll/pitch targets from normalized stick inputs
   float max_tilt = static_cast<float>(get_parameter("max_tilt_angle").as_double());
   float pitch_target = 0.0f;
   float roll_target = 0.0f;
