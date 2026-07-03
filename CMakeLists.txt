@@ -18,7 +18,6 @@ find_package(actuator_msgs REQUIRED)
 ##########################################################################
 add_subdirectory(external/107-Arduino-Cyphal)
 add_subdirectory(external/libsocketcan)
-add_subdirectory(external/mp-units/src)
 #######################################################################################
 include_directories(include)
 #######################################################################################
@@ -31,7 +30,7 @@ add_executable(${VIPER_TARGET}
   src/main.cpp
 )
 #######################################################################################
-target_link_libraries(${VIPER_TARGET} cyphal++ socketcan mp-units)
+target_link_libraries(${VIPER_TARGET} cyphal++ socketcan)
 #######################################################################################
 target_compile_features(${VIPER_TARGET} PRIVATE cxx_std_20)
 ament_target_dependencies(${VIPER_TARGET} rclcpp std_msgs sensor_msgs geometry_msgs actuator_msgs)

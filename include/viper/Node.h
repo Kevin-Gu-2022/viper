@@ -25,9 +25,6 @@
 
 #include <cyphal++/cyphal++.h>
 
-#include <mp-units/systems/si/si.h>
-#include <mp-units/systems/angular/angular.h>
-
 #include "CanManager.h"
 #include "vector.h"
 #include "ComplementaryFilter.h"
@@ -39,11 +36,6 @@
 /**************************************************************************************
  * NAMESPACE
  **************************************************************************************/
-
-using namespace mp_units;
-using mp_units::si::unit_symbols::m;
-using mp_units::si::unit_symbols::s;
-using mp_units::angular::unit_symbols::rad;
 
 namespace viper
 {
