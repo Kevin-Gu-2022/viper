@@ -152,7 +152,7 @@ CanardMicrosecond Node::micros()
 void Node::init_teleop_sub()
 {
   // Declare default parameters for teleop topic and QoS settings
-  declare_parameter("teleop_topic", "cmd_vel_head");
+  declare_parameter("teleop_topic", "cmd_vel");
   declare_parameter("teleop_topic_deadline_ms", 100);
   declare_parameter("teleop_topic_liveliness_lease_duration", 1000);
 
@@ -249,7 +249,6 @@ void Node::init_joy_sub()
         bool enable_pressed = (msg->buttons[enable_button_index] == 1);
         _armed = enable_pressed;
 
-        // !TODO: Check logic here...
         // If deadman switch released, reset target velocities/attitude and reset controllers
         if (!enable_pressed) {
           // Targets from joystick
@@ -377,6 +376,7 @@ void Node::ctrl_loop()
   auto motor_commands = _motor_mixer.mix(_thrust_target, torque_target);
 
   // Scale motor commands to appropriate range
+  // WARNING!! This must be set to something smaller if running on actual hardware
   const float MOTOR_SCALE = 1000.0f;
   // We must offset the commands by at least 10 rad/s otherwise ESC will think they're stalled
   const float LOWER_STALL_LIMIT = 10.0f;
@@ -430,12 +430,12 @@ void Node::declare_control_parameters()
   declare_parameter("attitude_roll_d", 0.001);
 
   declare_parameter("attitude_pitch_p", 6.0);
-  declare_parameter("attitude_pitch_i", 0.0);
-  declare_parameter("attitude_pitch_d", 0.0);
+  declare_parameter("attitude_pitch_i", 0.01);
+  declare_parameter("attitude_pitch_d", 0.001);
 
-  declare_parameter("attitude_yaw_p", 0.0);
-  declare_parameter("attitude_yaw_i", 0.0);
-  declare_parameter("attitude_yaw_d", 0.0);
+  declare_parameter("attitude_yaw_p", 0.5);
+  declare_parameter("attitude_yaw_i", 0.05);
+  declare_parameter("attitude_yaw_d", 0.001);
 
   declare_parameter("attitude_roll_damping", 0.9);
   declare_parameter("attitude_pitch_damping", 0.9);
