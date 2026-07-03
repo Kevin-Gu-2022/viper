@@ -12,6 +12,7 @@ This directory contains a series of useful scripts related to working with CAN b
 - `setup_vcan.sh`: Sets up vcan on development host. Bitrate irrelevant as it is entirely virtual.
 - `setup_yakut_slcan.sh`: Calls `setup_slcan.sh` internally, and exports a few environment variables needed for use with yakut. Source this script.
 - `setup_yakut_vcan.sh`: Calls `setup_vcan.sh` internally, and exports a few environment variables needed for use with yakut. Source this script.
+- `build.sh`: Call from root of ROS 2 Workspace, not package root! Need to add yourself to `docker` group. Execute with `--help` flag for usage.
 
 > [!NOTE]
 > CAN is using 1 Mbps bitrate right now. Change speed code in `setup_yakut_slcan.sh` or bitrate in `setup_can.sh` if decide to use something else. The ESCs will need to be updated accordingly too (restart ESC for it to be stored in EEPROM).
